@@ -87,6 +87,31 @@
     </div>
 
     <div class="card">
+      <div class="card__head" data-i18n="cardWatchHealth"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="watchHealth.enabled">
+        <span data-i18n="optWatchHealthEnabled"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="watchHealth.keepAwake">
+        <span data-i18n="optWatchHealthKeepAwake"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="watchHealth.notifications">
+        <span data-i18n="optWatchHealthNotifications"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="watchHealth.recoverTab">
+        <span data-i18n="optWatchHealthRecover"></span>
+      </label>
+      <label class="num">
+        <span data-i18n="optWatchHealthStaleMinutes"></span>
+        <input type="number" min="2" max="30" step="1" data-set="watchHealth.staleAfterMin">
+      </label>
+      <p class="hint" data-i18n="hintWatchHealth"></p>
+    </div>
+
+    <div class="card">
       <div class="card__head" data-i18n="cardDrops"></div>
       <label class="opt">
         <input type="checkbox" data-set="drops.enabled">

@@ -21,7 +21,8 @@
       '../lib/browser.js',
       '../lib/log.js',
       '../lib/storage.js',
-      './live-watch.js');
+      './live-watch.js',
+      './watch-health.js');
   }
 
   var api = g.ADT.api;
@@ -207,6 +208,7 @@
 
   api.alarms.onAlarm.addListener(function (alarm) {
     if (alarm.name === ALARM_DROPS) runDropsCheck();
+    if (alarm.name === ALARM_HEALTH) g.ADT.watchHealth.check();
     if (alarm.name.indexOf(ALARM_CLOSE_TAB_PREFIX) === 0) {
       var tabId = Number(alarm.name.slice(ALARM_CLOSE_TAB_PREFIX.length));
       if (Number.isInteger(tabId)) {
@@ -225,6 +227,20 @@
       case 'adt:live-report':
         g.ADT.liveWatch.handleReport(
           msg.live || [], msg.known || [], sender && sender.tab && sender.tab.id);
+        sendResponse({ ok: true });
+        return true;
+
+      case 'adt:watch-heartbeat':
+        g.ADT.watchHealth.handleHeartbeat(
+          msg, sender && sender.tab && sender.tab.id).then(function () {
+            sendResponse({ ok: true });
+          });
+        return true;
+
+      case 'adt:watch-stopped':
+        if (sender && sender.tab && sender.tab.id != null) {
+          g.ADT.watchHealth.forgetTab(sender.tab.id);
+        }
         sendResponse({ ok: true });
         return true;
 
@@ -292,6 +308,7 @@
 
   api.tabs.onRemoved.addListener(function (tabId) {
     g.ADT.liveWatch.forgetTab(tabId);
+    g.ADT.watchHealth.forgetTab(tabId);
   });
 
   api.runtime.onInstalled.addListener(function (details) {

@@ -422,7 +422,28 @@ console.log('\n[13] Ad marker lifecycle');
     : fail('post-ad player stalls have no automatic recovery fallback');
 }
 
-console.log('\n[14] Lifetime statistics');
+console.log('\n[14] Stream watchdog');
+{
+  for (const target of ['chrome', 'firefox', 'opera']) {
+    const manifest = JSON.parse(await readFile(join(SRC, `manifest.${target}.json`), 'utf8'));
+    (manifest.permissions || []).includes('notifications')
+      ? ok(`${target} declares notification permission`)
+      : fail(`${target}: notification permission missing`);
+  }
+
+  const content = await readFile(join(SRC, 'content/modules/watch-health.js'), 'utf8');
+  /currentTime/.test(content) && /advancing/.test(content) && /adt:watch-heartbeat/.test(content)
+    ? ok('watchdog measures video progress and reports heartbeats')
+    : fail('watchdog does not verify real player progress');
+
+  const background = await readFile(join(SRC, 'background/watch-health.js'), 'utf8');
+  /autoDiscardable:\s*false/.test(background) && /api\.notifications\.create/.test(background) &&
+      /api\.tabs\.reload/.test(background)
+    ? ok('watchdog protects, notifies and recovers stream tabs')
+    : fail('watchdog recovery path is incomplete');
+}
+
+console.log('\n[15] Lifetime statistics');
 {
   const storage = await readFile(join(SRC, 'lib/storage.js'), 'utf8');
   const popupHtml = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
@@ -437,7 +458,7 @@ console.log('\n[14] Lifetime statistics');
     : fail('popup does not clearly present lifetime statistics');
 }
 
-console.log('\n[15] Creator links');
+console.log('\n[16] Creator links');
 {
   const popup = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
   const coffee = /href="https:\/\/buymeacoffee\.com\/zcrxticxl"/.test(popup);

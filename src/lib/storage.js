@@ -47,6 +47,15 @@
       pollIntervalSec: 45
     },
 
+    watchHealth: {
+      enabled: true,
+      keepAwake: true,
+      notifications: true,
+      recoverTab: true,
+      heartbeatSec: 30,
+      staleAfterMin: 5
+    },
+
     adMute: {
       enabled: true,
       overlay: true,
