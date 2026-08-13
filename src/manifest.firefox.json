@@ -1,0 +1,69 @@
+{
+  "manifest_version": 2,
+  "name": "__MSG_extName__",
+  "version": "0.2.3",
+  "default_locale": "en",
+  "description": "__MSG_extDescription__",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "ad-twitcher@zcrxticxl",
+      "data_collection_permissions": {
+        "required": ["none"]
+      },
+      "strict_min_version": "109.0"
+    }
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "alarms",
+    "*://*.twitch.tv/*"
+  ],
+  "background": {
+    "persistent": true,
+    "scripts": [
+      "lib/browser.js",
+      "lib/log.js",
+      "lib/storage.js",
+      "background/live-watch.js",
+      "background/sw.js"
+    ]
+  },
+  "browser_action": {
+    "default_title": "__MSG_extActionTitle__",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.twitch.tv/*"],
+      "run_at": "document_idle",
+      "all_frames": false,
+      "css": ["content/overlay.css"],
+      "js": [
+        "content/beacon.js",
+        "lib/browser.js",
+        "lib/log.js",
+        "lib/storage.js",
+        "lib/dom.js",
+        "content/modules/channel-points.js",
+        "content/modules/drops.js",
+        "content/modules/ad-mute.js",
+        "content/modules/viewer-stats.js",
+        "content/modules/sidebar-watch.js",
+        "content/index.js"
+      ]
+    }
+  ]
+}

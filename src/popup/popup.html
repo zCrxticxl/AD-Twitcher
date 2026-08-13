@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<!--
+  Copyright 2026 zCrxticxl
+  SPDX-License-Identifier: Apache-2.0
+
+  Every user-visible string carries data-i18n and is filled from _locales at
+  runtime; the literal text below is only a build-time placeholder.
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AD-Twitcher</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="hdr">
+    <div class="hdr__brand">
+      <img class="hdr__icon" src="../icons/icon32.png" alt="">
+      <span class="hdr__dot" id="statusDot"></span>
+      <span class="hdr__name">AD-Twitcher</span>
+    </div>
+    <label class="switch" data-i18n-title="masterToggleTitle">
+      <input type="checkbox" id="masterToggle">
+      <span class="switch__track"></span>
+    </label>
+  </header>
+
+  <nav class="tabs" role="tablist">
+    <button class="tabs__btn is-active" data-tab="status" role="tab" aria-selected="true" data-i18n="tabStatus"></button>
+    <button class="tabs__btn" data-tab="settings" role="tab" aria-selected="false" data-i18n="tabSettings"></button>
+    <button class="tabs__btn" data-tab="viewers" role="tab" aria-selected="false" data-i18n="tabViewers"></button>
+    <button class="tabs__btn" data-tab="log" role="tab" aria-selected="false" data-i18n="tabLog"></button>
+  </nav>
+
+  <!-- Status -->
+  <section class="pane is-active" data-pane="status">
+    <div class="ctx" id="ctxLine" data-i18n="statusSearching"></div>
+    <div class="diag" id="diagBox" hidden></div>
+    <button class="btn btn--warn" id="btnInject" data-i18n="btnInject" hidden></button>
+
+    <div class="stats-head">
+      <div class="card__head" id="lifetimeStatsTitle" data-i18n="cardLifetimeStats"></div>
+      <span class="stats-head__since" id="statsSince"></span>
+    </div>
+    <div class="stats" aria-labelledby="lifetimeStatsTitle">
+      <div class="stat"><b id="sPoints">0</b><span data-i18n="statBonuses"></span></div>
+      <div class="stat"><b id="sDrops">0</b><span data-i18n="statDrops"></span></div>
+      <div class="stat"><b id="sAds">0</b><span data-i18n="statAdsMuted"></span></div>
+      <div class="stat"><b id="sStreams">0</b><span data-i18n="statTabsOpened"></span></div>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardActiveModules"></div>
+      <div class="chips" id="activeModules"><span class="chip chip--off">-</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardLiveWatcher"></div>
+      <div class="kv"><span data-i18n="liveLastReport"></span><b id="lwAge">-</b></div>
+      <div class="kv"><span data-i18n="liveInSidebar"></span><b id="lwLive">-</b></div>
+      <div class="kv"><span data-i18n="liveOpenedByUs"></span><b id="lwOpen">-</b></div>
+      <p class="hint" id="lwHint"></p>
+    </div>
+
+    <div class="row">
+      <button class="btn" id="btnDropsNow" data-i18n="btnDropsNow"></button>
+      <button class="btn btn--ghost" id="btnRefresh" data-i18n="btnRefresh"></button>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="pane" data-pane="settings">
+    <div class="card">
+      <div class="card__head" data-i18n="cardChannelPoints"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="channelPoints.enabled">
+        <span data-i18n="optPointsAuto"></span>
+      </label>
+      <label class="num">
+        <span data-i18n="optScanInterval"></span>
+        <input type="number" min="1500" step="500" data-set="channelPoints.scanIntervalMs">
+      </label>
+      <label class="num">
+        <span data-i18n="optClickJitter"></span>
+        <input type="number" min="0" step="100" data-set="channelPoints.jitterMs">
+      </label>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardDrops"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="drops.enabled">
+        <span data-i18n="optDropsEnabled"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="drops.autoClaim">
+        <span data-i18n="optDropsAutoClaim"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="drops.watchNotifications">
+        <span data-i18n="optDropsWatchNotifications"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="drops.openInventoryTab">
+        <span data-i18n="optDropsOpenInventory"></span>
+      </label>
+      <label class="num">
+        <span data-i18n="optDropsInterval"></span>
+        <input type="number" min="15" step="15" data-set="drops.checkIntervalMin">
+      </label>
+      <p class="hint" data-i18n="hintDrops"></p>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardAutoJoin"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="autoJoin.enabled">
+        <span data-i18n="optAutoJoinEnabled"></span>
+      </label>
+      <label class="ta">
+        <span data-i18n="optWatchlist"></span>
+        <textarea id="watchlist" rows="4" spellcheck="false"></textarea>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="autoJoin.background">
+        <span data-i18n="optAutoJoinBackground"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="autoJoin.muteOnOpen">
+        <span data-i18n="optAutoJoinMute"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="autoJoin.closeWhenOffline">
+        <span data-i18n="optAutoJoinClose"></span>
+      </label>
+      <p class="hint" data-i18n="hintAutoJoin"></p>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardAds"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="adMute.enabled">
+        <span data-i18n="optAdMuteEnabled"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="adMute.overlay">
+        <span data-i18n="optAdMuteOverlay"></span>
+      </label>
+      <p class="hint" data-i18n="hintAdMute"></p>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardViewerStats"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="viewerStats.enabled">
+        <span data-i18n="optViewerStatsEnabled"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="viewerStats.panel">
+        <span data-i18n="optViewerStatsPanel"></span>
+      </label>
+      <label class="num">
+        <span data-i18n="optViewerWindow"></span>
+        <input type="number" min="1" max="30" step="1" data-set="viewerStats.windowMin">
+      </label>
+    </div>
+
+    <div class="card">
+      <div class="card__head" data-i18n="cardMisc"></div>
+      <label class="num">
+        <span data-i18n="optLogLevel"></span>
+        <select data-set="logLevel">
+          <option value="debug">debug</option>
+          <option value="info">info</option>
+          <option value="warn">warn</option>
+          <option value="error">error</option>
+          <option value="silent">silent</option>
+        </select>
+      </label>
+      <button class="btn btn--danger" id="btnReset" data-i18n="btnReset"></button>
+    </div>
+  </section>
+
+  <!-- Viewers -->
+  <section class="pane" data-pane="viewers">
+    <div class="notice">
+      <b data-i18n="viewerNoticeTitle"></b>
+      <span data-i18n="viewerNoticeBody"></span>
+    </div>
+    <div class="card" id="vsCard">
+      <div class="card__head">
+        <span data-i18n="viewerCardHead"></span>
+        <span class="muted" id="vsChannel"></span>
+      </div>
+      <div class="kv"><span data-i18n="rowViewers"></span><b id="vsViewers">-</b></div>
+      <div class="kv"><span data-i18n="rowMsgsPerMin"></span><b id="vsMpm">-</b></div>
+      <div class="kv"><span data-i18n="rowUniqueChatters"></span><b id="vsUnique">-</b></div>
+      <div class="kv"><span data-i18n="rowChattersPer1k"></span><b id="vsRatio">-</b></div>
+      <div class="kv"><span data-i18n="rowMsgsPerChatter"></span><b id="vsMpc">-</b></div>
+      <div class="kv"><span data-i18n="rowViewerJumps"></span><b id="vsJumps">-</b></div>
+      <p class="hint" id="vsMeta"></p>
+    </div>
+    <p class="hint" data-i18n="viewerBaseline"></p>
+  </section>
+
+  <!-- Log -->
+  <section class="pane" data-pane="log">
+    <div class="row">
+      <button class="btn btn--ghost" id="btnLogTab" data-i18n="btnLogTab"></button>
+      <button class="btn btn--ghost" id="btnLogBg" data-i18n="btnLogBackground"></button>
+    </div>
+    <pre class="log" id="logOut">-</pre>
+  </section>
+
+  <footer class="creator-links">
+    <a class="creator-link creator-link--coffee"
+       href="https://buymeacoffee.com/zcrxticxl"
+       target="_blank" rel="noopener noreferrer"
+       data-i18n-title="supportLinkLabel"
+       data-i18n-aria-label="supportLinkLabel">☕ <span>Buy me a coffee</span></a>
+    <a class="creator-link"
+       href="https://x.com/zCrxticxl"
+       target="_blank" rel="noopener noreferrer"
+       data-i18n-title="twitterLinkLabel"
+       data-i18n-aria-label="twitterLinkLabel"><span>@zCrxticxl</span></a>
+  </footer>
+
+  <script src="../lib/browser.js"></script>
+  <script src="../lib/log.js"></script>
+  <script src="../lib/storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
