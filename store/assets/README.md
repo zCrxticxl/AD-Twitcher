@@ -6,5 +6,12 @@
 - `screenshot-viewers-1280x800.png`: viewer activity metrics
 - `promo-small-440x280.png`: Chrome Web Store small promotional tile
 - `promo-marquee-1400x560.png`: Chrome Web Store marquee promotional tile
+- `icon-opera-64.png`: Opera Add-ons icon
+- `opera/screenshot-status-800x500.png`: Opera status screenshot
+- `opera/screenshot-settings-800x500.png`: Opera settings screenshot
+- `opera/screenshot-viewers-800x500.png`: Opera viewer metrics screenshot
+
+The Opera assets use the catalog's required 64 px icon and stay within its
+800 x 600 px screenshot limit.
 
 The screenshots use representative sample values so that the interface can be shown without publishing a real user's Twitch activity.

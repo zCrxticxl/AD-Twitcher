@@ -212,10 +212,45 @@ function evalFragment(source, pattern, tail, context = {}) {
 
   console.log('\n[DANGER_RX lets the bonus chest through]');
   const allowed = [
-    'Claim Bonus', 'Bonus einlösen', 'Reclamar', 'Récupérer', 'Riscatta',
+    'Claim Bonus', 'Bonus einlösen', 'Jetzt abholen', 'Reclamar', 'Récupérer', 'Riscatta',
     'Resgatar', 'Odbierz', 'Получить', 'Talep Et', '受け取る', '받기', '领取'
   ];
   allowed.forEach((t) => eq('allows "' + t + '"', DANGER_RX.test(t), false));
+}
+
+/* ---------------------------------------- drops: localized claim captions */
+{
+  const src = read('src/content/modules/drops.js');
+  const catalog = evalFragment(
+    src,
+    /var CLAIM_TEXTS_BY_LOCALE = \{[\s\S]*?\n {2}\};/,
+    'CLAIM_TEXTS_BY_LOCALE;');
+  const normalize = evalFragment(
+    read('src/lib/dom.js'),
+    /function normalizeLabel\(value\) \{[\s\S]*?\n {2}\}/,
+    'normalizeLabel;');
+  const captions = Object.values(catalog).flat();
+  const matchesClaim = (text) => captions.map(normalize).includes(normalize(text));
+  const current = {
+    en: 'Claim Now', de: 'Jetzt abholen', es: 'Reclamar ahora',
+    fr: 'Récupérer maintenant', it: 'Riscatta ora', pt_BR: 'Resgatar agora',
+    pl: 'Odbierz teraz', ru: 'Получить сейчас', tr: 'Şimdi Talep Et',
+    ja: '今すぐ受け取る', ko: '지금 받기', zh_CN: '立即领取'
+  };
+  const locales = readdirSync(join(ROOT, 'src/_locales')).sort();
+  const DANGER_RX = evalFragment(
+    read('src/lib/dom.js'),
+    /var DANGER_RX = new RegExp\(\[[\s\S]*?\]\.join\('\|'\), 'i'\);/,
+    'DANGER_RX;');
+
+  console.log('\n[drop claim captions]');
+  eq('claim catalog covers every shipped locale', Object.keys(catalog).sort(), locales);
+  Object.entries(current).forEach(([locale, caption]) =>
+    eq(`${locale} matches "${caption}"`, matchesClaim(caption), true));
+  eq('normalizes whitespace and case', matchesClaim('  JETZT\u00a0ABHOLEN  '), true);
+  eq('does not match paid suffixes', matchesClaim('Jetzt abholen und Bits kaufen'), false);
+  eq('no localized claim caption trips the money guard',
+    captions.filter((caption) => DANGER_RX.test(caption)), []);
 }
 
 /* ------------------------------------- drops: notification matcher per locale */

@@ -1,6 +1,7 @@
 # AD-Twitcher
 
-Twitch browser extension. Chrome MV3 and Firefox MV2 from a single codebase.
+Twitch browser extension. Chrome and Opera GX MV3 plus Firefox MV2 from a
+single codebase.
 Plain JavaScript, no bundler, no runtime dependencies.
 
 ## Preview
@@ -41,8 +42,9 @@ check and owns the counters.
 ## Build and install
 
 ```bash
-node build.mjs              # dist/chrome and dist/firefox
+node build.mjs              # dist/chrome, dist/firefox and dist/opera
 node build.mjs chrome       # one target only
+node build.mjs opera        # Opera GX only
 node build.mjs --zip        # plus zip archives in dist/
 npm test                    # syntax, manifests, logic and locale checks
 ```
@@ -54,6 +56,10 @@ unpacked", pick `dist/chrome`.
 pick `dist/firefox/manifest.json`. Temporary add-ons do not survive a restart.
 Permanent installation requires signing (`web-ext sign`) or Firefox Developer
 Edition with `xpinstall.signatures.required=false`.
+
+**Opera GX:** open `opera:extensions`, enable developer mode, click "Load
+unpacked", and pick `dist/opera`. The Opera GX build is a dedicated package
+that uses the same Manifest V3 code and permissions as Chrome.
 
 ## What works, and what cannot
 
@@ -150,6 +156,7 @@ in `storage.local`, never in module variables.
 src/
   manifest.chrome.json     MV3
   manifest.firefox.json    MV2
+  manifest.opera.json      MV3 (kept identical to Chrome by checks)
   _locales/                12 message catalogs
   lib/        browser.js (API shim, i18n) · storage.js (settings, write queue)
               log.js · dom.js (helpers, click guard)
