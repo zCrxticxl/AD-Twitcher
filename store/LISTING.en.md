@@ -12,6 +12,8 @@ Features:
 
 - Claims available channel point bonus chests
 - Claims completed drops from the Twitch Drops inventory
+- Warns when a stream tab stalls and Drops or channel points may stop progressing
+- Protects monitored Twitch tabs from automatic discarding and attempts one recovery reload
 - Mutes ad breaks and optionally covers the player while an ad is running
 - Restores the player automatically when the ad ends
 - Opens selected followed channels when they go live

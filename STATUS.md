@@ -1,6 +1,6 @@
 # AD-Twitcher - status and handover
 
-Version 1.0.5, 13 August 2026.
+Version 1.0.6, 13 August 2026.
 
 ## Verification status
 
@@ -40,6 +40,9 @@ live Twitch behavior still requires manual browser sessions.
     Twitch replaces the player, removes stale placeholders and verifies that
     media time progresses after an ad. If Twitch still leaves the player
     stalled, one guarded automatic reload recovers playback.
+12. The stream watchdog measures actual video-time progress, marks monitored
+    tabs as non-discardable, reports stale or suspended tabs through localized
+    browser notifications and performs at most one recovery reload per incident.
 
 ## 0.2.0
 

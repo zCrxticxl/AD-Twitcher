@@ -4,7 +4,7 @@
   "version": "0.2.3",
   "default_locale": "en",
   "description": "__MSG_extDescription__",
-  "permissions": ["storage", "tabs", "alarms", "scripting"],
+  "permissions": ["storage", "tabs", "alarms", "scripting", "notifications"],
   "host_permissions": ["*://*.twitch.tv/*"],
   "background": {
     "service_worker": "background/sw.js"
@@ -37,6 +37,7 @@
         "lib/log.js",
         "lib/storage.js",
         "lib/dom.js",
+        "content/modules/watch-health.js",
         "content/modules/channel-points.js",
         "content/modules/drops.js",
         "content/modules/ad-mute.js",
