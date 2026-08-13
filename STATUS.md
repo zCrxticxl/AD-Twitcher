@@ -1,20 +1,21 @@
 # AD-Twitcher - status and handover
 
-Version 1.0.4, 13 August 2026.
+Version 1.0.5, 13 August 2026.
 
 ## Verification status
 
 | Layer | State |
 |---|---|
-| `npm test` (syntax, manifests, static checks, 98 logic tests, lifecycle harness) | passing |
+| `npm test` (syntax, manifests, static checks, 115 logic tests, lifecycle harness) | passing |
 | Runtime in Firefox | **partial**, see open items |
 | Runtime in Chrome | **never tested** |
+| Runtime in Opera GX | package loads; 12-locale drop-claim fixture passing; live Twitch pending |
 | Popup rendering in a real browser | **passing** at 380 × 600; overview and tab interaction checked |
 
-The source and both distribution targets build successfully. A dependency-free
+The source and all three distribution targets build successfully. A dependency-free
 lifecycle harness now verifies that delayed automation cannot click after a
 module has stopped. The popup was rendered and interacted with in a browser;
-live Twitch behavior still requires manual Firefox and Chrome sessions.
+live Twitch behavior still requires manual browser sessions.
 
 ## Reliability and UI pass
 

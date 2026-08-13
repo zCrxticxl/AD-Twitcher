@@ -8,7 +8,7 @@
 /**
  * @fileoverview Static checks that need no dev dependencies:
  *   [1] every JS file passes `node --check`
- *   [2] both manifests parse and every file they reference exists
+ *   [2] all manifests parse and every file they reference exists
  *   [3] importScripts targets in the service worker resolve
  *   [4] content scripts report themselves to the beacon, in manifest order
  *   [5] the ping handler lives in the beacon and nowhere else
@@ -56,7 +56,7 @@ for (const f of await walk(SRC, (e) => e.endsWith('.js'))) {
 }
 
 console.log('\n[2] Manifests');
-for (const target of ['chrome', 'firefox']) {
+for (const target of ['chrome', 'firefox', 'opera']) {
   const p = join(SRC, `manifest.${target}.json`);
   let m;
   try {
@@ -128,10 +128,17 @@ console.log('\n[4] Beacon self-reporting');
     else fail(`${f} does not call __adtLoaded('${f}')`);
   }
 
-  const firefox = JSON.parse(await readFile(join(SRC, 'manifest.firefox.json'), 'utf8'));
-  JSON.stringify(firefox.content_scripts[0].js) === JSON.stringify(contentScripts)
-    ? ok('Chrome and Firefox lists are identical')
-    : fail('content_scripts.js differs between the manifests');
+  for (const target of ['firefox', 'opera']) {
+    const manifest = JSON.parse(await readFile(join(SRC, `manifest.${target}.json`), 'utf8'));
+    JSON.stringify(manifest.content_scripts[0].js) === JSON.stringify(contentScripts)
+      ? ok(`Chrome and ${target} lists are identical`)
+      : fail(`content_scripts.js differs between Chrome and ${target}`);
+  }
+
+  const opera = JSON.parse(await readFile(join(SRC, 'manifest.opera.json'), 'utf8'));
+  JSON.stringify(opera) === JSON.stringify(chromeManifest)
+    ? ok('Opera GX manifest matches Chrome MV3 exactly')
+    : fail('Opera GX manifest drifted from Chrome MV3');
 
   const popup = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
   const block = popup.match(/EXPECTED_FILES\s*=\s*\[([\s\S]*?)\]/);

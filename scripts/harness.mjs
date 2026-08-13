@@ -19,10 +19,12 @@ function assert(name, value) {
   if (!value) failures++;
 }
 
-function lifecycleSandbox(path, page) {
+function lifecycleSandbox(path, page, options = {}) {
   let nextTimer = 1;
   const timeouts = new Map();
   let clicks = 0;
+  const body = {};
+  const buttonText = options.buttonText || 'Claim';
   const button = {
     tagName: 'BUTTON', isConnected: true, disabled: false,
     className: 'claimable-bonus',
@@ -30,15 +32,20 @@ function lifecycleSandbox(path, page) {
     getAttribute: (name) => name === 'aria-disabled' ? 'false' : 'Bonus'
   };
   const D = {
-    q: () => button, qAny: () => page === 'drops' ? {} : button,
-    qaAny: () => [button], buttonsByText: () => [button],
+    q: () => button,
+    qAny: () => page === 'drops'
+      ? (options.legacyRoot === false ? null : {})
+      : button,
+    qaAny: () => options.attributeMatch === false ? [] : [button],
+    buttonsByText: (patterns, root) => root === body && patterns.some((pattern) =>
+      String(pattern).toLowerCase() === buttonText.toLowerCase()) ? [button] : [],
     isVisible: () => true, isDangerous: () => false, inModal: () => false,
-    safeClick: () => { clicks++; return true; }, textOf: () => 'Claim',
+    safeClick: () => { clicks++; return true; }, textOf: () => buttonText,
     currentChannel: () => 'test', toast() {}, observe: () => ({disconnect() {}}),
     waitFor: () => Promise.resolve(null)
   };
   const sandbox = {
-    globalThis: null, window: null, document: {body: {}},
+    globalThis: null, window: null, document: {body},
     location: {pathname: page === 'drops' ? '/drops/inventory' : '/test'},
     console, WeakSet, Set, Promise,
     setTimeout(fn) { const id = nextTimer++; timeouts.set(id, fn); return id; },
@@ -71,6 +78,18 @@ console.log('\n[lifecycle harness]');
   h.sandbox.ADT.modules.drops.stop();
   [...h.timeouts.values()].forEach((fn) => fn());
   assert('drops cannot click after stop()', h.clicks() === 0);
+}
+{
+  const h = lifecycleSandbox('src/content/modules/drops.js', 'drops', {
+    legacyRoot: false,
+    attributeMatch: false,
+    buttonText: 'Jetzt abholen'
+  });
+  h.sandbox.ADT.modules.drops.start({autoClaim: true, watchNotifications: true});
+  h.sandbox.ADT.modules.drops.claimNow();
+  [...h.timeouts.values()].forEach((fn) => fn());
+  assert('drops claim "Jetzt abholen" without a legacy inventory root', h.clicks() === 1);
+  h.sandbox.ADT.modules.drops.stop();
 }
 
 console.log(failures ? `\n${failures} harness failure(s).\n` : '\nLifecycle harness clean.\n');

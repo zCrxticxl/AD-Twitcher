@@ -10,9 +10,10 @@
  * matching manifest in place. No bundler and no transpiler: the extension ships
  * as plain ES5-compatible JavaScript.
  *
- *   node build.mjs                 both targets
+ *   node build.mjs                 all targets
  *   node build.mjs chrome          Chrome only
  *   node build.mjs firefox --zip   Firefox plus a zip in dist/
+ *   node build.mjs opera --zip     Opera GX plus a zip in dist/
  */
 import { cp, rm, mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -26,14 +27,29 @@ const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, 'src');
 const DIST = join(ROOT, 'dist');
 
-const TARGETS = ['chrome', 'firefox'];
+const TARGETS = ['chrome', 'firefox', 'opera'];
 const args = process.argv.slice(2);
 const wantZip = args.includes('--zip');
 const picked = args.filter((a) => TARGETS.includes(a));
 const targets = picked.length ? picked : TARGETS;
 
 /** Build inputs that must not end up in the output. */
-const SKIP = new Set(['manifest.chrome.json', 'manifest.firefox.json', 'icon512.png']);
+const SKIP = new Set(TARGETS.map((target) => `manifest.${target}.json`));
+SKIP.add('icon512.png');
+
+async function zipDirectory(source, destination) {
+  if (process.platform === 'win32') {
+    const entries = await readdir(source);
+    await execFileP('tar.exe', ['-a', '-c', '-f', destination, ...entries], { cwd: source });
+    const { stdout } = await execFileP('tar.exe', ['-t', '-f', destination]);
+    const invalid = stdout.split(/\r?\n/).filter((entry) =>
+      entry.includes('\\') || entry.startsWith('/') || entry.split('/').includes('..'));
+    if (invalid.length) throw new Error(`Invalid ZIP paths: ${invalid.join(', ')}`);
+    return;
+  }
+
+  await execFileP('zip', ['-qr', destination, '.'], { cwd: source });
+}
 
 async function copyTree(from, to) {
   await mkdir(to, { recursive: true });
@@ -82,7 +98,7 @@ async function buildTarget(target) {
   const zipPath = join(DIST, `ad-twitcher-${target}-v${manifest.version}.zip`);
   await rm(zipPath, { force: true });
   try {
-    await execFileP('zip', ['-qr', zipPath, '.'], { cwd: out });
+    await zipDirectory(out, zipPath);
     console.log(`  ${''.padEnd(8)}    ${zipPath.replace(ROOT + '/', '')}`);
   } catch {
     console.warn('  (zip not found, archive skipped)');

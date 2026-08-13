@@ -107,6 +107,11 @@
     return (el && (el.innerText || el.textContent) || '').trim();
   }
 
+  /** @param {*} value @return {string} */
+  function normalizeLabel(value) {
+    return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+  }
+
   /**
    * Finds buttons by their visible label. Survives class renames, and it is the
    * only way to match a control whose markup carries no stable attribute.
@@ -117,12 +122,13 @@
    * @return {!Array<!Element>}
    */
   function buttonsByText(patterns, root) {
-    var rx = patterns.map(function (p) {
-      return p instanceof RegExp ? p : new RegExp('^\\s*' + p + '\\s*$', 'i');
-    });
+    var exact = patterns.filter(function (p) { return !(p instanceof RegExp); })
+      .map(normalizeLabel);
+    var rx = patterns.filter(function (p) { return p instanceof RegExp; });
     return qa('button, [role="button"]', root).filter(function (b) {
       var t = textOf(b);
       if (!t || t.length > 40) return false;
+      if (exact.indexOf(normalizeLabel(t)) >= 0) return true;
       return rx.some(function (r) { return r.test(t); });
     });
   }

@@ -43,38 +43,61 @@
     'button[data-a-target*="claim" i]'
   ];
 
-  /**
-   * Button captions in every UI language Twitch serves to a shipped locale.
-   * Matched whole and case-insensitively, so "Claim" never matches "Claim Bits".
-   *
-   * @const {!Array<string>}
-   */
-  var CLAIM_TEXTS = [
-    // en
-    'Claim', 'Claim Now', 'Claim Reward',
-    // de
-    'Einlösen', 'Einloesen', 'Jetzt einlösen', 'Belohnung einlösen', 'Abholen',
-    // es
-    'Reclamar', 'Reclamar ahora', 'Reclamar recompensa',
-    // fr
-    'Réclamer', 'Récupérer', 'Réclamer la récompense',
-    // it
-    'Riscatta', 'Riscatta ora', 'Riscatta ricompensa',
-    // pt-BR
-    'Resgatar', 'Resgatar agora', 'Resgatar recompensa',
-    // pl
-    'Odbierz', 'Odbierz teraz', 'Odbierz nagrodę',
-    // ru
-    'Получить', 'Забрать', 'Получить награду',
-    // tr
-    'Talep Et', 'Şimdi Talep Et', 'Ödülü Talep Et',
-    // ja
-    '受け取る', '今すぐ受け取る', '報酬を受け取る',
-    // ko
-    '받기', '지금 받기', '보상 받기',
-    // zh-CN
-    '领取', '立即领取', '领取奖励'
-  ];
+  /** Button captions in every shipped UI locale. @const {!Object<string, !Array<string>>} */
+  var CLAIM_TEXTS_BY_LOCALE = {
+    en: [
+      'Claim', 'Claim Now', 'Claim Reward', 'Collect', 'Collect Now',
+      'Redeem', 'Redeem Now'
+    ],
+    de: [
+      'Einlösen', 'Einloesen', 'Jetzt einlösen', 'Belohnung einlösen',
+      'Abholen', 'Jetzt abholen', 'Belohnung abholen'
+    ],
+    es: [
+      'Reclamar', 'Reclamar ahora', 'Reclamar recompensa',
+      'Canjear', 'Canjear ahora'
+    ],
+    fr: [
+      'Réclamer', 'Réclamer maintenant', 'Réclamer la récompense',
+      'Récupérer', 'Récupérer maintenant'
+    ],
+    it: [
+      'Riscatta', 'Riscatta ora', 'Riscatta ricompensa',
+      'Ritira', 'Ritira ora'
+    ],
+    pt_BR: [
+      'Resgatar', 'Resgatar agora', 'Resgatar recompensa',
+      'Coletar', 'Coletar agora'
+    ],
+    pl: [
+      'Odbierz', 'Odbierz teraz', 'Odbierz nagrodę',
+      'Zgarnij', 'Zgarnij teraz'
+    ],
+    ru: [
+      'Получить', 'Получить сейчас', 'Получить награду',
+      'Забрать', 'Забрать сейчас'
+    ],
+    tr: [
+      'Talep Et', 'Şimdi Talep Et', 'Ödülü Talep Et',
+      'Al', 'Şimdi Al'
+    ],
+    ja: [
+      '受け取る', '今すぐ受け取る', '報酬を受け取る',
+      '獲得', '今すぐ獲得'
+    ],
+    ko: [
+      '받기', '지금 받기', '보상 받기',
+      '수령', '지금 수령'
+    ],
+    zh_CN: [
+      '领取', '立即领取', '现在领取', '领取奖励'
+    ]
+  };
+
+  /** @const {!Array<string>} */
+  var CLAIM_TEXTS = Object.keys(CLAIM_TEXTS_BY_LOCALE).reduce(function (all, locale) {
+    return all.concat(CLAIM_TEXTS_BY_LOCALE[locale]);
+  }, []);
 
   /* ---------------------------------- watcher, everywhere else, read-only */
 
@@ -155,9 +178,10 @@
 
   /** @return {!Array<!Element>} */
   function collectClaimButtons() {
-    // Belt and braces: without an inventory root nothing happens at all.
-    var root = D.qAny(INVENTORY_ROOTS);
-    if (!root || !onInventoryPage()) return [];
+    // Twitch occasionally removes the inventory wrapper. The route remains the
+    // hard boundary; only then may exact claim labels be scanned document-wide.
+    if (!onInventoryPage()) return [];
+    var root = D.qAny(INVENTORY_ROOTS) || document.body;
 
     var byAttr = D.qaAny(CLAIM_SELECTORS, root);
     var byText = D.buttonsByText(CLAIM_TEXTS, root);

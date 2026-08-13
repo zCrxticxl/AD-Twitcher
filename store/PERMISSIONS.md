@@ -30,6 +30,11 @@ Required because every feature operates exclusively on Twitch pages. The extensi
 
 Firefox uses the same `storage`, `tabs`, `alarms` and Twitch host-access purposes described above. The Firefox Manifest V2 build does not request the `scripting` permission because its packaged scripts use the Manifest V2 tab injection API.
 
+## Opera GX permissions
+
+Opera GX uses the same Manifest V3 package and the same `storage`, `tabs`,
+`alarms`, `scripting` and Twitch host-access purposes described for Chrome.
+
 ## Remote code declaration
 
 No. AD-Twitcher does not download or execute remote code. All executable code is included in the submitted package as readable JavaScript.
