@@ -1,0 +1,557 @@
+/**
+ * @license
+ * Copyright 2026 zCrxticxl
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/**
+ * @fileoverview Popup controller. Renders settings, counters, live-watch state
+ * and the per-tab diagnosis, and localizes the static markup on load.
+ */
+(function () {
+  'use strict';
+
+  var api = ADT.api;
+
+  /**
+   * @param {string} id
+   * @return {?Element}
+   */
+  var $ = function (id) {
+    return document.getElementById(id);
+  };
+
+  /**
+   * @param {string} sel
+   * @return {!Array<!Element>}
+   */
+  var $$ = function (sel) {
+    return Array.prototype.slice.call(document.querySelectorAll(sel));
+  };
+
+  /** @type {?number} */
+  var activeTabId = null;
+
+  /** @type {?number} */
+  var pollTimer = null;
+
+  /**
+   * Must mirror content_scripts[0].js in both manifests. scripts/check.mjs
+   * fails the build if the two drift apart.
+   * @const {!Array<string>}
+   */
+  var EXPECTED_FILES = [
+    'content/beacon.js',
+    'lib/browser.js',
+    'lib/log.js',
+    'lib/storage.js',
+    'lib/dom.js',
+    'content/modules/channel-points.js',
+    'content/modules/drops.js',
+    'content/modules/ad-mute.js',
+    'content/modules/viewer-stats.js',
+    'content/modules/sidebar-watch.js',
+    'content/index.js'
+  ];
+
+  /** @const {!Object<string, string>} Module name to message key. */
+  var MODULE_LABELS = {
+    channelPoints: 'moduleChannelPoints',
+    drops: 'moduleDrops',
+    adMute: 'moduleAdMute',
+    viewerStats: 'moduleViewerStats',
+    sidebarWatch: 'moduleSidebarWatch'
+  };
+
+  /** @const {string} Shown wherever a value is not available. */
+  var EMPTY = '-';
+
+  /* --------------------------------------------------------------- i18n */
+
+  /**
+   * Fills every element carrying data-i18n or a data-i18n-<attr> pair. Called
+   * once, before the first render.
+   */
+  function localizeDom() {
+    document.documentElement.lang = ADT.uiLocale;
+
+    $$('[data-i18n]').forEach(function (el) {
+      el.textContent = ADT.msg(el.dataset.i18n);
+    });
+
+    ['title', 'placeholder', 'aria-label'].forEach(function (attr) {
+      var key = 'data-i18n-' + attr;
+      $$('[' + key + ']').forEach(function (el) {
+        el.setAttribute(attr, ADT.msg(el.getAttribute(key)));
+      });
+    });
+
+    document.title = ADT.msg('extName');
+  }
+
+  /* --------------------------------------------- path helpers for data-set */
+
+  /**
+   * @param {!Object} obj
+   * @param {string} path Dotted, for example "drops.autoClaim".
+   * @return {*}
+   */
+  function getPath(obj, path) {
+    return path.split('.').reduce(function (o, k) {
+      return o == null ? undefined : o[k];
+    }, obj);
+  }
+
+  /**
+   * @param {string} path Dotted.
+   * @param {*} value
+   * @return {!Object} A nested patch object carrying only that leaf.
+   */
+  function patchFromPath(path, value) {
+    var parts = path.split('.');
+    var root = {};
+    var cur = root;
+    for (var i = 0; i < parts.length - 1; i++) {
+      cur[parts[i]] = {};
+      cur = cur[parts[i]];
+    }
+    cur[parts[parts.length - 1]] = value;
+    return root;
+  }
+
+  /* --------------------------------------------------------- popup tabs */
+
+  function bindTabs() {
+    $$('.tabs__btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        $$('.tabs__btn').forEach(function (b) {
+          b.classList.remove('is-active');
+          b.setAttribute('aria-selected', 'false');
+        });
+        $$('.pane').forEach(function (p) { p.classList.remove('is-active'); });
+        btn.classList.add('is-active');
+        btn.setAttribute('aria-selected', 'true');
+        var pane = document.querySelector('.pane[data-pane="' + btn.dataset.tab + '"]');
+        if (pane) pane.classList.add('is-active');
+        if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+        if (btn.dataset.tab === 'viewers') refreshViewerStats();
+      });
+    });
+  }
+
+  /* ----------------------------------------------------------- rendering */
+
+  /** @param {!Object} s Settings. */
+  function renderSettings(s) {
+    $('masterToggle').checked = !!s.enabled;
+    $('statusDot').classList.toggle('is-on', !!s.enabled);
+
+    $$('[data-set]').forEach(function (el) {
+      var v = getPath(s, el.dataset.set);
+      if (el.type === 'checkbox') el.checked = !!v;
+      else el.value = v == null ? '' : v;
+    });
+
+    $('watchlist').value = (s.autoJoin.channels || []).join('\n');
+  }
+
+  /**
+   * Counters live under their own storage key so that incrementing them never
+   * looks like a settings change.
+   *
+   * @param {!Object} st
+   */
+  function renderStats(st) {
+    $('sPoints').textContent = ADT.formatNumber(st.pointsClaimed || 0);
+    $('sDrops').textContent = ADT.formatNumber(st.dropsClaimed || 0);
+    $('sAds').textContent = ADT.formatNumber(st.adsMuted || 0);
+    $('sStreams').textContent = ADT.formatNumber(st.streamsOpened || 0);
+    if (st.trackingSince) {
+      var date = new Intl.DateTimeFormat(ADT.uiLocale, {
+        year: 'numeric', month: 'short', day: 'numeric'
+      }).format(new Date(st.trackingSince));
+      $('statsSince').textContent = ADT.msg('statsRecordedSince', date);
+    } else {
+      $('statsSince').textContent = ADT.msg('statsRecordedOverall');
+    }
+  }
+
+  /**
+   * @param {number} ts Epoch milliseconds, 0 for never.
+   * @return {string}
+   */
+  function ago(ts) {
+    if (!ts) return ADT.msg('agoNever');
+    var s = Math.round((Date.now() - ts) / 1000);
+    if (s < 60) return ADT.msg('agoSeconds', s);
+    if (s < 3600) return ADT.msg('agoMinutes', Math.round(s / 60));
+    return ADT.msg('agoHours', Math.round(s / 3600));
+  }
+
+  /** @param {!Object} live liveWatch.status() result. */
+  function renderLive(live) {
+    $('lwAge').textContent = ago(live.lastReportAt);
+    $('lwLive').textContent = live.liveNow.length
+      ? live.liveNow.length +
+        (live.liveNow.length <= 3 ? ' (' + live.liveNow.join(', ') + ')' : '')
+      : '0';
+    $('lwOpen').textContent = live.watchedOpen.length
+      ? live.watchedOpen.join(', ')
+      : EMPTY;
+
+    var hint = '';
+    if (live.stale) hint = ADT.msg('liveHintStale');
+    else if (!live.knownCount) hint = ADT.msg('liveHintEmpty');
+    $('lwHint').textContent = hint;
+  }
+
+  /**
+   * @param {string} className
+   * @param {string} text
+   * @return {!Element}
+   */
+  function chip(className, text) {
+    var el = document.createElement('span');
+    el.className = className;
+    el.textContent = text;
+    return el;
+  }
+
+  /**
+   * @param {!Element} host
+   * @param {!Array<!Element>} children
+   */
+  function replaceChildren(host, children) {
+    host.textContent = '';
+    children.forEach(function (c) { host.appendChild(c); });
+  }
+
+  /** No beacon at all, so no script is present in the tab. */
+  function renderNoScript(tab) {
+    var title = document.createElement('b');
+    title.textContent = ADT.msg('statusNoScript');
+    var url = document.createElement('span');
+    url.className = 'muted';
+    url.textContent = (tab.url || '').replace(/^https?:\/\//, '').slice(0, 44);
+
+    replaceChildren($('ctxLine'), [title, document.createElement('br'), url]);
+    replaceChildren($('activeModules'), [chip('chip chip--off', ADT.msg('chipNotInjected'))]);
+    $('diagBox').hidden = true;
+    $('btnInject').hidden = false;
+  }
+
+  /**
+   * The beacon answers but the rest is incomplete. The first missing file is
+   * the one that threw.
+   *
+   * @param {!Object} res Beacon response.
+   */
+  function renderPartial(res) {
+    var missing = EXPECTED_FILES.filter(function (f) {
+      return res.loaded.indexOf(f) < 0;
+    });
+
+    var title = document.createElement('b');
+    title.textContent = ADT.msg('statusPartial');
+    var count = document.createElement('span');
+    count.className = 'muted';
+    count.textContent = ADT.msg('statusFilesLoaded',
+      [res.loaded.length, EXPECTED_FILES.length]);
+
+    replaceChildren($('ctxLine'), [title, document.createElement('br'), count]);
+    replaceChildren($('activeModules'), [chip('chip chip--off', ADT.msg('chipDegraded'))]);
+
+    var box = $('diagBox');
+    box.textContent = '';
+
+    if (missing.length) {
+      var h = document.createElement('div');
+      h.className = 'diag__h';
+      h.textContent = ADT.msg('diagMissingHeader');
+      var ol = document.createElement('ol');
+      ol.className = 'diag__l';
+      missing.forEach(function (f, i) {
+        var li = document.createElement('li');
+        if (i === 0) li.className = 'diag__first';
+        li.textContent = f;
+        ol.appendChild(li);
+      });
+      box.appendChild(h);
+      box.appendChild(ol);
+    }
+
+    if (res.errors && res.errors.length) {
+      var eh = document.createElement('div');
+      eh.className = 'diag__h';
+      eh.textContent = ADT.msg('diagErrorsHeader');
+      var ul = document.createElement('ul');
+      ul.className = 'diag__l';
+      res.errors.forEach(function (e) {
+        var li = document.createElement('li');
+        var where = document.createElement('b');
+        where.textContent = e.where;
+        li.appendChild(where);
+        li.appendChild(document.createElement('br'));
+        li.appendChild(document.createTextNode(e.msg));
+        if (e.stack) {
+          li.appendChild(document.createElement('br'));
+          var st = document.createElement('span');
+          st.className = 'muted';
+          st.textContent = e.stack;
+          li.appendChild(st);
+        }
+        ul.appendChild(li);
+      });
+      box.appendChild(eh);
+      box.appendChild(ul);
+    }
+
+    if (!box.childNodes.length) {
+      var note = document.createElement('div');
+      note.className = 'diag__h';
+      note.textContent = ADT.msg('diagStartupFailed');
+      box.appendChild(note);
+    }
+
+    box.hidden = false;
+    $('btnInject').hidden = false;
+  }
+
+  function renderNoTab() {
+    $('ctxLine').textContent = ADT.msg('statusNoTab');
+    replaceChildren($('activeModules'), [chip('chip chip--off', EMPTY)]);
+    $('diagBox').hidden = true;
+    $('btnInject').hidden = true;
+  }
+
+  /** @param {?Object} res Beacon response. */
+  function renderContext(res) {
+    if (!res || !res.ok) {
+      renderNoTab();
+      return;
+    }
+    $('btnInject').hidden = true;
+    $('diagBox').hidden = true;
+
+    var label = {
+      channel: ADT.msg('pageChannel', res.channel || '?'),
+      drops: ADT.msg('pageDrops'),
+      other: ADT.msg('pageOther')
+    }[res.page] || ADT.msg('pageOther');
+    $('ctxLine').textContent = label;
+
+    replaceChildren($('activeModules'), res.active && res.active.length
+      ? res.active.map(function (m) {
+        return chip('chip', MODULE_LABELS[m] ? ADT.msg(MODULE_LABELS[m]) : m);
+      })
+      : [chip('chip chip--off', ADT.msg('chipNone'))]);
+  }
+
+  /* ------------------------------------------------------- viewer stats */
+
+  function refreshViewerStats() {
+    if (activeTabId == null) return;
+    ADT.sendToTab(activeTabId, { type: 'adt:get-viewer-stats' }).then(function (res) {
+      var fields = ['vsViewers', 'vsMpm', 'vsUnique', 'vsRatio', 'vsMpc', 'vsJumps'];
+      if (!res || !res.ok) {
+        fields.forEach(function (id) { $(id).textContent = EMPTY; });
+        $('vsChannel').textContent = '';
+        $('vsMeta').textContent = ADT.msg('viewerMetaInactive');
+        return;
+      }
+      var d = res.data;
+      $('vsChannel').textContent = d.channel ? '· ' + d.channel : '';
+      $('vsViewers').textContent = ADT.formatNumber(d.viewers, EMPTY);
+      $('vsMpm').textContent = ADT.formatNumber(d.msgsPerMin, EMPTY);
+      $('vsUnique').textContent = ADT.formatNumber(d.uniqueChatters, EMPTY);
+      $('vsRatio').textContent = ADT.formatNumber(d.chattersPer1k, EMPTY);
+      $('vsMpc').textContent = ADT.formatNumber(d.msgsPerChatter, EMPTY);
+      $('vsJumps').textContent = d.jumps.length
+        ? d.jumps.map(function (j) { return (j.delta > 0 ? '+' : '') + j.delta; }).join(', ')
+        : ADT.msg('chipNone');
+      $('vsMeta').textContent = ADT.msg('viewerMeta',
+        [d.windowMin, d.messages, d.sampledFor]);
+    });
+  }
+
+  /* ---------------------------------------------------------------- log */
+
+  /** @param {?Object} res */
+  function showLog(res) {
+    if (!res || !res.ok || !res.lines || !res.lines.length) {
+      $('logOut').textContent = ADT.msg('logEmpty');
+      return;
+    }
+    $('logOut').textContent = res.lines.map(function (l) {
+      var d = new Date(l.t);
+      var hh = String(d.getHours()).padStart(2, '0');
+      var mm = String(d.getMinutes()).padStart(2, '0');
+      var ss = String(d.getSeconds()).padStart(2, '0');
+      return hh + ':' + mm + ':' + ss + '  ' +
+        l.kind.toUpperCase().padEnd(5) + '  ' + l.msg;
+    }).join('\n');
+  }
+
+  /* ------------------------------------------------------- tab discovery */
+
+  /**
+   * Prefers the active tab, then any tab in the same window, then any tab at
+   * all. Users often click the toolbar icon from somewhere else.
+   *
+   * @return {!Promise<?Object>}
+   */
+  function findTwitchTab() {
+    return Promise.resolve(api.tabs.query({ active: true, currentWindow: true }))
+      .then(function (tabs) {
+        var t = tabs && tabs[0];
+        if (t && /:\/\/[^\/]*twitch\.tv\//.test(t.url || '')) return t;
+        return Promise.resolve(api.tabs.query({ url: '*://*.twitch.tv/*' }))
+          .then(function (all) {
+            if (!all || !all.length) return null;
+            var win = t && t.windowId;
+            return all.filter(function (x) { return x.windowId === win; })[0] || all[0];
+          });
+      })
+      .catch(function () { return null; });
+  }
+
+  /* ------------------------------------------------------------ bindings */
+
+  function bindInputs() {
+    $$('[data-set]').forEach(function (el) {
+      var evt = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
+      el.addEventListener(evt, function () {
+        var val;
+        if (el.type === 'checkbox') {
+          val = el.checked;
+        } else if (el.type === 'number') {
+          val = parseInt(el.value, 10);
+          if (isNaN(val)) return;
+        } else {
+          val = el.value;
+        }
+
+        ADT.settings.set(patchFromPath(el.dataset.set, val)).then(function () {
+          ADT.send({ type: 'adt:settings-changed' });
+        });
+      });
+    });
+
+    var watchlistTimer = null;
+    $('watchlist').addEventListener('input', function () {
+      clearTimeout(watchlistTimer);
+      watchlistTimer = setTimeout(function () {
+        var list = $('watchlist').value
+          .split('\n')
+          .map(function (x) {
+            return x.trim().toLowerCase()
+              .replace(/^https?:\/\/(www\.)?twitch\.tv\//, '')
+              .replace(/[\/?#].*$/, '');
+          })
+          .filter(Boolean);
+        // Drop duplicates, keep order.
+        list = list.filter(function (x, i) { return list.indexOf(x) === i; });
+        ADT.settings.set({ autoJoin: { channels: list } });
+      }, 500);
+    });
+
+    $('masterToggle').addEventListener('change', function () {
+      ADT.settings.set({ enabled: $('masterToggle').checked }).then(function () {
+        $('statusDot').classList.toggle('is-on', $('masterToggle').checked);
+        ADT.send({ type: 'adt:settings-changed' });
+      });
+    });
+
+    $('btnReset').addEventListener('click', function () {
+      if (!confirm(ADT.msg('confirmReset'))) return;
+      ADT.settings.reset().then(function (s) {
+        renderSettings(s);
+        ADT.settings.getStats().then(renderStats);
+        ADT.send({ type: 'adt:settings-changed' });
+      });
+    });
+
+    $('btnDropsNow').addEventListener('click', function () {
+      ADT.send({ type: 'adt:drops-check-now' });
+      if (activeTabId != null) {
+        ADT.sendToTab(activeTabId, { type: 'adt:claim-drops-now' });
+      }
+      $('btnDropsNow').textContent = ADT.msg('btnDropsNowBusy');
+      setTimeout(function () {
+        $('btnDropsNow').textContent = ADT.msg('btnDropsNow');
+      }, 2500);
+    });
+
+    $('btnRefresh').addEventListener('click', function () {
+      if (activeTabId != null) ADT.sendToTab(activeTabId, { type: 'adt:refresh' });
+      refreshAll();
+    });
+
+    $('btnInject').addEventListener('click', function () {
+      var b = $('btnInject');
+      b.disabled = true;
+      b.textContent = ADT.msg('btnInjectBusy');
+      ADT.send({ type: 'adt:reinject' }).then(function (r) {
+        b.disabled = false;
+        b.textContent = ADT.msg('btnInject');
+        if (r && r.ok) {
+          var n = r.result.injected;
+          $('ctxLine').textContent = n
+            ? ADT.msg('injectDone', n)
+            : ADT.msg('injectNothing');
+        }
+        setTimeout(refreshAll, 1200);
+      });
+    });
+
+    $('btnLogTab').addEventListener('click', function () {
+      if (activeTabId == null) {
+        $('logOut').textContent = ADT.msg('logNoTab');
+        return;
+      }
+      ADT.sendToTab(activeTabId, { type: 'adt:get-log' }).then(showLog);
+    });
+
+    $('btnLogBg').addEventListener('click', function () {
+      ADT.send({ type: 'adt:bg-log' }).then(showLog);
+    });
+  }
+
+  /* ---------------------------------------------------------- bootstrap */
+
+  function refreshAll() {
+    ADT.settings.get().then(renderSettings);
+    ADT.settings.getStats().then(renderStats);
+
+    ADT.send({ type: 'adt:status' }).then(function (res) {
+      if (res && res.ok) renderLive(res.live);
+    });
+
+    findTwitchTab().then(function (t) {
+      if (!t || t.id == null) {
+        activeTabId = null;
+        renderNoTab();
+        return null;
+      }
+      activeTabId = t.id;
+      return ADT.pingTab(t.id).then(function (res) {
+        if (!res) renderNoScript(t);                 // No script at all.
+        else if (!res.complete) renderPartial(res);  // Beacon alive, rest broken.
+        else renderContext(res);                     // Healthy.
+      });
+    });
+  }
+
+  localizeDom();
+  bindTabs();
+  bindInputs();
+  refreshAll();
+
+  pollTimer = setInterval(function () {
+    refreshAll();
+    var pane = document.querySelector('.pane[data-pane="viewers"]');
+    if (pane && pane.classList.contains('is-active')) refreshViewerStats();
+  }, 3000);
+
+  window.addEventListener('unload', function () { clearInterval(pollTimer); });
+})();

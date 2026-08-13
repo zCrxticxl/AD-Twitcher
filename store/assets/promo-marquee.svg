@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="560" viewBox="0 0 1400 560">
+  <defs>
+    <radialGradient id="g1" cx="78%" cy="20%" r="70%"><stop offset="0" stop-color="#783dc5" stop-opacity=".65"/><stop offset="1" stop-color="#090b0e" stop-opacity="0"/></radialGradient>
+    <radialGradient id="g2" cx="20%" cy="100%" r="65%"><stop offset="0" stop-color="#194d78" stop-opacity=".42"/><stop offset="1" stop-color="#090b0e" stop-opacity="0"/></radialGradient>
+    <filter id="shadow"><feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000" flood-opacity=".6"/></filter>
+  </defs>
+  <rect width="1400" height="560" fill="#090b0e"/>
+  <rect width="1400" height="560" fill="url(#g1)"/><rect width="1400" height="560" fill="url(#g2)"/>
+  <rect x="32" y="32" width="1336" height="496" rx="30" fill="none" stroke="#fff" stroke-opacity=".1"/>
+  <image href="src/icons/icon512.png" x="98" y="98" width="86" height="86"/>
+  <text x="98" y="245" fill="#f5f6f8" font-family="DejaVu Sans" font-size="72" font-weight="bold">Your Twitch routine,</text>
+  <text x="98" y="323" fill="#f5f6f8" font-family="DejaVu Sans" font-size="72" font-weight="bold">handled.</text>
+  <text x="102" y="374" fill="#b9bec8" font-family="DejaVu Sans" font-size="22">Rewards, ad mute, live channels and local activity metrics.</text>
+  <g transform="translate(102 415)" font-family="DejaVu Sans" font-size="15" fill="#d6c1f7">
+    <rect width="126" height="36" rx="18" fill="#21172d" stroke="#61408c"/><text x="20" y="24">Local only</text>
+    <rect x="138" width="144" height="36" rx="18" fill="#21172d" stroke="#61408c"/><text x="158" y="24">12 languages</text>
+    <rect x="294" width="130" height="36" rx="18" fill="#21172d" stroke="#61408c"/><text x="316" y="24">No tracking</text>
+  </g>
+  <g transform="translate(945 83) rotate(2)" filter="url(#shadow)">
+    <rect width="350" height="405" rx="24" fill="#15181d" stroke="#fff" stroke-opacity=".12"/>
+    <circle cx="22" cy="22" r="4" fill="#454a54"/><circle cx="36" cy="22" r="4" fill="#454a54"/><circle cx="50" cy="22" r="4" fill="#454a54"/>
+    <rect x="14" y="42" width="322" height="348" rx="14" fill="#0b0d10" stroke="#2b3038"/>
+    <text x="32" y="77" fill="#f5f6f8" font-family="DejaVu Sans" font-size="16" font-weight="bold">●  AD-Twitcher</text>
+    <rect x="32" y="102" width="286" height="1" fill="#292e36"/>
+    <text x="32" y="137" fill="#a6acb7" font-family="DejaVu Sans" font-size="11">LIFETIME STATS</text>
+    <g font-family="DejaVu Sans"><rect x="32" y="153" width="135" height="76" rx="10" fill="#12151a" stroke="#292e36"/><text x="47" y="184" fill="#fff" font-size="23" font-weight="bold">1,284</text><text x="47" y="207" fill="#838a95" font-size="10">Point bonuses</text>
+    <rect x="183" y="153" width="135" height="76" rx="10" fill="#12151a" stroke="#292e36"/><text x="198" y="184" fill="#fff" font-size="23" font-weight="700">37</text><text x="198" y="207" fill="#838a95" font-size="10">Drops claimed</text>
+    <rect x="32" y="245" width="286" height="101" rx="10" fill="#12151a" stroke="#292e36"/><text x="47" y="272" fill="#a6acb7" font-size="10" letter-spacing="1">ACTIVE MODULES</text><rect x="47" y="289" width="76" height="25" rx="7" fill="#21172d"/><text x="58" y="306" fill="#cdb4f4" font-size="10">Rewards</text><rect x="131" y="289" width="70" height="25" rx="7" fill="#21172d"/><text x="143" y="306" fill="#cdb4f4" font-size="10">Ad mute</text><rect x="209" y="289" width="80" height="25" rx="7" fill="#21172d"/><text x="220" y="306" fill="#cdb4f4" font-size="10">Live watch</text></g>
+  </g>
+</svg>

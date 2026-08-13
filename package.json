@@ -1,0 +1,24 @@
+{
+  "name": "ad-twitcher",
+  "version": "1.0.4",
+  "private": true,
+  "description": "Twitch browser extension: channel points, drops, auto-join, ad mute, viewer metrics.",
+  "author": "zCrxticxl",
+  "repository": "https://github.com/zCrxticxl/AD-Twitcher",
+  "homepage": "https://github.com/zCrxticxl/AD-Twitcher",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:chrome": "node build.mjs chrome",
+    "build:firefox": "node build.mjs firefox",
+    "package": "node build.mjs --zip",
+    "check": "node scripts/check.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "harness": "node scripts/harness.mjs",
+    "test": "node scripts/check.mjs && node scripts/smoke.mjs && node scripts/harness.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
