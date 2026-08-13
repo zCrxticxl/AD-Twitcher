@@ -46,6 +46,7 @@
     'lib/log.js',
     'lib/storage.js',
     'lib/dom.js',
+    'content/modules/watch-health.js',
     'content/modules/channel-points.js',
     'content/modules/drops.js',
     'content/modules/ad-mute.js',
@@ -56,6 +57,7 @@
 
   /** @const {!Object<string, string>} Module name to message key. */
   var MODULE_LABELS = {
+    watchHealth: 'moduleWatchHealth',
     channelPoints: 'moduleChannelPoints',
     drops: 'moduleDrops',
     adMute: 'moduleAdMute',

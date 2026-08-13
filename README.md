@@ -30,6 +30,7 @@ all twelve caption sets rather than English only.
 
 | Module | What it does | Runs on |
 |---|---|---|
+| `watchHealth` | Detects stalled playback, protects the tab and sends a local alert | Channel pages |
 | `channelPoints` | Clicks the bonus chest | Channel pages |
 | `drops` | Claims finished drops (inventory) and reads the unlock notification | Everywhere |
 | `adMute` | Detects ads, mutes the player, covers it with an overlay | Channel pages |
@@ -65,8 +66,10 @@ that uses the same Manifest V3 code and permissions as Chrome.
 
 **Drops are claimed, not farmed.**
 Twitch counts drop progress server-side from the running player's heartbeats.
-Nothing accumulates without an open stream. The extension collects finished
-drops, and that is all.
+Nothing accumulates without an open stream. The watchdog can detect stopped
+playback, protect the tab from automatic discarding and attempt one recovery
+reload, but Twitch still decides whether viewing progress counts. The extension
+collects finished drops after Twitch marks them complete.
 
 **`adMute` is not an ad blocker.**
 Twitch uses server-side ad insertion: the ad is muxed into the same HLS stream

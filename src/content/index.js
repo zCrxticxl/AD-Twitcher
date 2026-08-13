@@ -50,6 +50,7 @@
     if (!s.enabled) return want;
 
     if (kind === 'channel') {
+      if (s.watchHealth.enabled) want.watchHealth = s.watchHealth;
       if (s.channelPoints.enabled) want.channelPoints = s.channelPoints;
       if (s.adMute.enabled) want.adMute = s.adMute;
       if (s.viewerStats.enabled) want.viewerStats = s.viewerStats;

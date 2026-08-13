@@ -1,8 +1,8 @@
-# AD-Twitcher 1.0.5 release checklist
+# AD-Twitcher 1.0.6 release checklist
 
 ## Package
 
-- [x] Version set to 1.0.5
+- [x] Version set to 1.0.6
 - [x] Stable Firefox ID set to `ad-twitcher@zcrxticxl`
 - [x] English and German store copy prepared
 - [x] Permission declarations prepared
