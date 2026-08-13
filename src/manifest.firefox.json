@@ -17,6 +17,7 @@
     "storage",
     "tabs",
     "alarms",
+    "notifications",
     "*://*.twitch.tv/*"
   ],
   "background": {
@@ -26,6 +27,7 @@
       "lib/log.js",
       "lib/storage.js",
       "background/live-watch.js",
+      "background/watch-health.js",
       "background/sw.js"
     ]
   },
@@ -57,6 +59,7 @@
         "lib/log.js",
         "lib/storage.js",
         "lib/dom.js",
+        "content/modules/watch-health.js",
         "content/modules/channel-points.js",
         "content/modules/drops.js",
         "content/modules/ad-mute.js",

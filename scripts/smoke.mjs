@@ -78,7 +78,8 @@ function evalFragment(source, pattern, tail, context = {}) {
     S.deepMerge({ a: true }, { a: false }), { a: false });
   eq('defaults cover every module',
     Object.keys(S.DEFAULTS).sort(),
-    ['adMute', 'autoJoin', 'channelPoints', 'drops', 'enabled', 'logLevel', 'viewerStats'].sort());
+    ['adMute', 'autoJoin', 'channelPoints', 'drops', 'enabled', 'logLevel',
+      'viewerStats', 'watchHealth'].sort());
 
   // Counters must not live in settings. While they did, every bump fired
   // storage.onChanged -> apply() -> restart -> the module saw the same ad or

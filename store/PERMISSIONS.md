@@ -22,18 +22,22 @@ Schedules local periodic checks for completed drops and maintenance of live-chan
 
 Reinjects the extension's packaged content scripts into already open Twitch tabs after installation or an extension update. No downloaded or remotely hosted code is executed.
 
+### notifications
+
+Shows a local warning when a monitored Twitch stream stops progressing or the browser suspends its tab, because Drops and channel points may no longer accumulate. Notifications contain only the affected channel name and never leave the user's device.
+
 ### Host access: `*://*.twitch.tv/*`
 
 Required because every feature operates exclusively on Twitch pages. The extension reads Twitch page state to identify available reward buttons, completed drop notifications, ad state, followed live channels, viewer counts and chat activity. It does not access other websites.
 
 ## Firefox permissions
 
-Firefox uses the same `storage`, `tabs`, `alarms` and Twitch host-access purposes described above. The Firefox Manifest V2 build does not request the `scripting` permission because its packaged scripts use the Manifest V2 tab injection API.
+Firefox uses the same `storage`, `tabs`, `alarms`, `notifications` and Twitch host-access purposes described above. The Firefox Manifest V2 build does not request the `scripting` permission because its packaged scripts use the Manifest V2 tab injection API.
 
 ## Opera GX permissions
 
 Opera GX uses the same Manifest V3 package and the same `storage`, `tabs`,
-`alarms`, `scripting` and Twitch host-access purposes described for Chrome.
+`alarms`, `scripting`, `notifications` and Twitch host-access purposes described for Chrome.
 
 ## Remote code declaration
 
@@ -52,5 +56,6 @@ AD-Twitcher does not collect or transmit user data. Settings, watched channel na
 5. A completed drop can be claimed on `https://www.twitch.tv/drops/inventory`.
 6. The ad overlay appears only while Twitch reports an active ad break and disappears when the ad ends.
 7. Viewer metrics appear after chat and viewer activity have been observed on a channel page.
+8. Pause a channel player for the configured warning period to observe the localized playback-stopped notification and one automatic recovery reload.
 
 No separate account, paid feature or test credential is required beyond a normal Twitch account.

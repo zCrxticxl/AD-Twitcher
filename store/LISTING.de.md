@@ -12,6 +12,8 @@ Funktionen:
 
 - Holt verfügbare Kanalpunkte-Bonustruhen ab
 - Löst abgeschlossene Drops im Twitch-Drops-Inventar ein
+- Warnt, wenn ein Stream-Tab festhängt und Drops oder Kanalpunkte nicht mehr weiterlaufen könnten
+- Schützt überwachte Twitch-Tabs vor automatischem Verwerfen und versucht einmal, sie neu zu laden
 - Schaltet Werbeblöcke stumm und deckt den Player auf Wunsch ab
 - Stellt den Player automatisch wieder her, sobald die Werbung endet
 - Öffnet ausgewählte gefolgte Kanäle, sobald sie live gehen
