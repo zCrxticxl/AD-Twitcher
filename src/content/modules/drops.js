@@ -270,7 +270,10 @@
     if (!isFinite(now)) return null;
     var max = Number(bar.getAttribute('aria-valuemax'));
     if (!isFinite(max) || max <= 0) max = 100;
-    return Math.max(0, Math.min(100, (now / max) * 100));
+    // Rounded here, at the source: 55 / 100 * 100 is 55.00000000000001, and
+    // that artefact would otherwise travel all the way into storage.
+    var percent = max === 100 ? now : (now / max) * 100;
+    return Math.max(0, Math.min(100, Math.round(percent * 10) / 10));
   }
 
   /**
@@ -412,7 +415,26 @@
      * too long list.
      */
     var live = out.filter(function (item) { return !item.gone; });
-    return (live.length ? live : out).map(function (item) {
+    if (!live.length) live = out;
+
+    /*
+     * A drop at 100 % has nothing left to wait for - it is either claimed or
+     * waiting for the claimer, and neither answers "how much longer". The same
+     * drop can also appear twice, because two campaigns can run under one name
+     * with the same reward tiers; keep the one that is further along.
+     */
+    var best = [];
+    live.forEach(function (item) {
+      if (item.percent >= 100) return;
+      for (var i = 0; i < best.length; i++) {
+        if (best[i].name !== item.name || best[i].campaign !== item.campaign) continue;
+        if (item.percent > best[i].percent) best[i] = item;
+        return;
+      }
+      best.push(item);
+    });
+
+    return best.map(function (item) {
       return {
         name: item.name,
         campaign: item.campaign,

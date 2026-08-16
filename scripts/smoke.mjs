@@ -430,6 +430,14 @@ function evalFragment(source, pattern, tail, context = {}) {
       card('Common 1', 10, 'von 1 Stunde', true),
       card('Rare 1', 5, 'von 2 Stunden', true)
     ]),
+    // Same title as the campaign above, which is why one alone is no identity:
+    // a finished drop, the same tier listed twice, and one still running.
+    campaign('KORD BREACH S1 Drops', [
+      card('Common 1', 100, 'von 1 Stunde', false),
+      card('Common 1', 40, 'von 1 Stunde', false),
+      card('Common 1', 55, 'von 1 Stunde', false),
+      card('Rare 2', 94, 'von 4 Stunden', false)
+    ]),
     campaign('EWC 2026', [
       card('EWC 2026 (Bronze)', 18, 'von 1 Stunde', false),
       card('EWC 2026 (Diamond)', 1, 'von 12 Stunden', false),
@@ -457,14 +465,19 @@ function evalFragment(source, pattern, tail, context = {}) {
 
   console.log('\n[drop progress on the real inventory markup]');
   const got = collect();
-  eq('a finished campaign is left out', got.length, 3);
+  eq('an expired campaign, a finished drop and a repeat are all left out',
+    got.length, 5);
   eq('the percentage comes from the progress bar',
-    got.map((g) => g.percent), [18, 1, 93]);
-  eq('the requirement comes from the caption', got.map((g) => g.hours), [1, 12, 4]);
-  eq('the name is the label in front of the bar',
-    got.map((g) => g.name), ['EWC 2026 (Bronze)', 'EWC 2026 (Diamond)', 'Rare 2']);
-  eq('every drop carries its campaign',
-    got.map((g) => g.campaign), ['EWC 2026', 'EWC 2026', 'EWC 2026']);
+    got.map((g) => g.percent), [55, 94, 18, 1, 93]);
+  eq('the requirement comes from the caption',
+    got.map((g) => g.hours), [1, 4, 1, 12, 4]);
+  eq('the name is the label in front of the bar', got.map((g) => g.name),
+    ['Common 1', 'Rare 2', 'EWC 2026 (Bronze)', 'EWC 2026 (Diamond)', 'Rare 2']);
+  eq('every drop carries its campaign', got.map((g) => g.campaign),
+    ['KORD BREACH S1 Drops', 'KORD BREACH S1 Drops', 'EWC 2026', 'EWC 2026',
+      'EWC 2026']);
+  eq('the same tier in two campaigns is not merged',
+    got.filter((g) => g.name === 'Rare 2').length, 2);
 }
 
 /* ------------------------------------------- ad-mute: stale marker handling */
