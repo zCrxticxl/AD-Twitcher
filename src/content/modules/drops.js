@@ -196,8 +196,12 @@
   /** @const {number} Captions are short; anything longer is prose, not a value. */
   var PROGRESS_TEXT_MAX = 60;
 
-  /** @const {number} Upper bound on one page scan, so a huge inventory cannot stall it. */
-  var MAX_SCANNED_BARS = 60;
+  /**
+   * Upper bound on one page scan. High enough to cover an inventory holding
+   * months of campaigns, low enough that a broken page cannot stall the tab.
+   * @const {number}
+   */
+  var MAX_SCANNED_BARS = 250;
 
   /** @const {number} How often a snapshot is sent while the page stays open. */
   var PROGRESS_TICK_MS = 120000;
@@ -384,21 +388,29 @@
     var seen = [];
 
     /*
-     * Every bar on the page, not the first few. The inventory lists campaign
-     * after campaign, so a cap applied here in document order throws away the
-     * drop that is nearly finished further down and keeps four that just
-     * started. Ranking happens once everything is in.
+     * The bound counts bars looked at, not bars kept. Counting kept ones let a
+     * stack of expired campaigns exhaust the budget before the scan ever
+     * reached the campaign that is actually running - the inventory keeps every
+     * campaign of the last months, and the live one is at the bottom.
      */
-    for (var i = 0; i < bars.length && out.length < MAX_SCANNED_BARS; i++) {
+    for (var i = 0; i < bars.length && i < MAX_SCANNED_BARS; i++) {
       var bar = bars[i];
       if (seen.indexOf(bar) >= 0) continue;     // Both selectors can hit one bar.
       seen.push(bar);
 
+      /*
+       * A caption is what separates a drop in progress from an already
+       * collected reward: the "Abgeholt" section at the bottom of the page
+       * renders those with a full bar too, but with a date instead of
+       * "10 % von 1 Stunde". Without a caption there is no requirement either,
+       * so such a row could not state a remaining time anyway.
+       */
       var caption = captionNear(bar);
       var parsed = parseProgress(caption);
+      if (!parsed) continue;
+
       var percent = barPercent(bar);
-      if (percent === null && parsed) percent = parsed.percent;
-      if (percent === null) continue;
+      if (percent === null) percent = parsed.percent;
 
       out.push({
         name: cardName(bar),

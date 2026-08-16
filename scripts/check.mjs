@@ -662,6 +662,15 @@ console.log('\n[20] Drop progress');
     ? ok('progress is only read on the inventory page')
     : fail('drops.js scrapes progress outside the inventory');
 
+  /*
+   * An inventory holds months of campaigns and the running one is at the
+   * bottom. A bound that counts kept bars lets the expired ones upstream eat
+   * the budget before the scan arrives.
+   */
+  /for \(var i = 0; i < bars\.length && i < MAX_SCANNED_BARS; i\+\+\)/.test(drops)
+    ? ok('the scan bound counts bars examined, not bars kept')
+    : fail('drops.js can run out of scan budget before the live campaign');
+
   /function storeProgress/.test(sw) && /Array\.isArray\(items\)/.test(sw) &&
       /slice\(0, MAX_PROGRESS_ITEMS\)/.test(sw)
     ? ok('the background validates and caps what the page reported')
