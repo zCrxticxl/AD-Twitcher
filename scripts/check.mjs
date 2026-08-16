@@ -690,9 +690,20 @@ console.log('\n[20] Drop progress');
     ? ok('each drop is reported with its campaign')
     : fail('drops.js reports drop names without their campaign');
 
-  /function cardIsUnavailable/.test(drops) && /if \(!live\.length\) live = out;/.test(drops)
-    ? ok('finished campaigns are dropped, but never the whole list')
-    : fail('drops.js either keeps expired drops or can filter everything away');
+  /*
+   * A dimmed reward image marks a drop the user has not earned yet, not a
+   * campaign that ended - reading it as the latter marked every running drop as
+   * expired. What separates the two is that a live campaign links to the
+   * channels where it can be earned.
+   */
+  /function campaignIsOver/.test(drops) && /a\[href\]/.test(drops) &&
+      !/inventory-opacity/.test(drops)
+    ? ok('a campaign counts as over when it no longer links to its channels')
+    : fail('drops.js judges campaigns by the dimmed reward image again');
+
+  /if \(!live\.length\) live = out;/.test(drops)
+    ? ok('expired campaigns are dropped, but never the whole list')
+    : fail('drops.js can filter every drop away');
 
   /*
    * A finished drop has no remaining time, so it must not take a row from a

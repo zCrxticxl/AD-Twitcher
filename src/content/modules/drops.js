@@ -229,14 +229,6 @@
   var CAMPAIGN_ROW = '.tw-tower';
 
   /**
-   * Twitch dims the image of a reward that can no longer be earned. The card
-   * keeps its progress bar, so without this the popup would rank finished
-   * campaigns against live ones.
-   * @const {string}
-   */
-  var UNAVAILABLE_MARK = 'img[class*="inventory-opacity-2"]';
-
-  /**
    * @param {string} text A progress caption.
    * @return {?{percent: number, hours: number}} Null when the text carries no
    *     percentage, which is most of the page.
@@ -251,7 +243,12 @@
 
     var raw = pct[1] !== undefined ? pct[1] : pct[2];
     var percent = Number(raw.replace(',', '.'));
-    if (!isFinite(percent) || percent < 0 || percent > 100) return null;
+    if (!isFinite(percent) || percent < 0) return null;
+
+    // Twitch counts past the requirement and prints it: a drop watched five
+    // times longer than needed reads "470 % von 1 Stunde". That is earned, not
+    // corrupt, so it is capped rather than thrown away.
+    if (percent > 100) percent = 100;
 
     var rest = (clean.slice(0, pct.index) + ' ' +
       clean.slice(pct.index + pct[0].length)).match(/\d+(?:[.,]\d+)?/g) || [];
@@ -334,10 +331,15 @@
 
   /**
    * @param {!Element} bar
-   * @return {?Element} The card holding one drop: image, name, bar, caption.
+   * @return {?Element} The row of cards belonging to one campaign.
    */
-  function cardOf(bar) {
-    return (bar.parentElement && bar.parentElement.parentElement) || null;
+  function towerOf(bar) {
+    if (typeof bar.closest !== 'function') return null;
+    try {
+      return bar.closest(CAMPAIGN_ROW);
+    } catch (e) {
+      return null;
+    }
   }
 
   /**
@@ -345,13 +347,7 @@
    * @return {string} The campaign this drop belongs to, '' when not found.
    */
   function campaignName(bar) {
-    if (typeof bar.closest !== 'function') return '';
-    var row;
-    try {
-      row = bar.closest(CAMPAIGN_ROW);
-    } catch (e) {
-      return '';
-    }
+    var row = towerOf(bar);
     // The campaign block holds its title, its end date and the row of cards.
     var block = row && row.parentElement && row.parentElement.parentElement;
     if (!block) return '';
@@ -365,16 +361,26 @@
   }
 
   /**
-   * @param {?Element} card
-   * @return {boolean}
+   * An active campaign says where to earn it: its block links to the
+   * participating channels or to the game's directory page. A campaign that has
+   * ended keeps its cards and its "about this drop" link, but loses that
+   * pointer. Reading that beats parsing "Ende: So., 16. Aug., 14:59 MESZ" in
+   * twelve languages.
+   *
+   * @param {!Element} bar
+   * @return {boolean} True when nothing on this campaign can progress any more.
    */
-  function cardIsUnavailable(card) {
-    if (!card || typeof card.querySelector !== 'function') return false;
-    try {
-      return !!card.querySelector(UNAVAILABLE_MARK);
-    } catch (e) {
-      return false;
+  function campaignIsOver(bar) {
+    var row = towerOf(bar);
+    var block = row && row.parentElement && row.parentElement.parentElement;
+    if (!block || typeof block.querySelectorAll !== 'function') return false;
+
+    var links = block.querySelectorAll('a[href]');
+    for (var i = 0; i < links.length; i++) {
+      var href = links[i].getAttribute('href') || '';
+      if (href.charAt(0) === '/' || href.indexOf('twitch.tv/') >= 0) return false;
     }
+    return true;
   }
 
   /**
@@ -417,7 +423,7 @@
         campaign: campaignName(bar),
         percent: percent,
         hours: parsed ? parsed.hours : 0,
-        gone: cardIsUnavailable(cardOf(bar))
+        gone: campaignIsOver(bar)
       });
     }
 
