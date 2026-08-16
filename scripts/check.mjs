@@ -646,6 +646,18 @@ console.log('\n[20] Drop progress');
     ? ok('the caption is read in both percent-sign orders')
     : fail('drops.js only reads one percent-sign order, which breaks Turkish');
 
+  // Twitch renders a real ARIA progress bar per drop. Reading aria-valuenow is
+  // language-independent and survives a rewritten caption; going back to text
+  // for the percentage would be a regression, not a simplification.
+  /role="progressbar"/.test(drops) && /aria-valuenow/.test(drops) &&
+      /function barPercent/.test(drops)
+    ? ok('the percentage comes from the progress bar, not from text')
+    : fail('drops.js reads the percentage out of text again');
+
+  /function captionNear/.test(drops) && !/if \(el\.children\.length\) continue/.test(drops)
+    ? ok('the caption is read from its container, which is not a leaf')
+    : fail('drops.js expects the caption to be a leaf node again');
+
   /function collectProgress/.test(drops) && /state\.mode !== 'claim'/.test(drops)
     ? ok('progress is only read on the inventory page')
     : fail('drops.js scrapes progress outside the inventory');

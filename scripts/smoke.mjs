@@ -318,6 +318,107 @@ function evalFragment(source, pattern, tail, context = {}) {
   eq('an impossible percentage is rejected', parseProgress('150 % von 4 Stunden'), null);
 }
 
+/* ------------------------------- drops: progress read off the real inventory */
+{
+  /*
+   * The tree below is the drop card as Twitch actually ships it, taken from a
+   * live /drops/inventory page on 2026-08-16. Two details matter and both broke
+   * an earlier attempt: the percentage lives in aria-valuenow rather than in
+   * text, and the caption splits its number into a child span, so the caption
+   * is not a leaf node.
+   */
+  const src = read('src/content/modules/drops.js');
+
+  let counter = 0;
+  // Content is ordered, mixing text and elements, because the caption depends
+  // on it: <span>10</span> comes before the "&nbsp;% von 1 Stunde" text node.
+  const el = (tagName, props = {}, content = []) => {
+    const node = {
+      tagName,
+      order: counter++,
+      attrs: props.attrs || {},
+      content,
+      children: content.filter((c) => typeof c !== 'string'),
+      parentElement: null,
+      getAttribute(name) {
+        return Object.prototype.hasOwnProperty.call(this.attrs, name)
+          ? this.attrs[name]
+          : null;
+      },
+      get textContent() {
+        return this.content
+          .map((c) => (typeof c === 'string' ? c : c.textContent))
+          .join('');
+      },
+      descendants() {
+        return this.children.flatMap((c) => [c, ...c.descendants()]);
+      },
+      querySelectorAll(selector) {
+        // Tag matching is case-insensitive in HTML documents, like the real one.
+        const wanted = selector.split(',').map((s) => s.trim().toLowerCase());
+        return this.descendants().filter((n) =>
+          wanted.includes(n.tagName.toLowerCase()) ||
+          wanted.some((w) => w.startsWith('.') && n.attrs.class === w.slice(1)) ||
+          wanted.some((w) => w.startsWith('[role=') &&
+            n.attrs.role === w.slice(7, -2)));
+      },
+      compareDocumentPosition(other) {
+        return other.order > this.order ? 4 : 2;
+      }
+    };
+    node.children.forEach((c) => { c.parentElement = node; });
+    return node;
+  };
+
+  // <p><span>10</span>&nbsp;% von 1 Stunde</p>, no-break space included: the
+  // parser must not need to clean it, because s already covers it.
+  const card = (name, valuenow, requirement) => el('DIV', {}, [
+    el('DIV', {}, [
+      el('DIV', {}, [el('P', {}, ['Diese Belohnung ist nicht mehr verfügbar.'])]),
+      el('DIV', {}, [el('P', {}, [name])])
+    ]),
+    el('DIV', {}, [
+      el('DIV', {attrs: {role: 'progressbar', 'aria-valuenow': String(valuenow),
+        'aria-valuemin': '0', 'aria-valuemax': '100'}}),
+      el('DIV', {}, [
+        el('P', {}, [el('SPAN', {}, [String(valuenow)]), ' % ' + requirement])
+      ])
+    ])
+  ]);
+
+  const inventory = el('DIV', {}, [
+    card('Common 1', 10, 'von 1 Stunde'),
+    card('Rare 1', 5, 'von 2 Stunden'),
+    card('Legendary 1', 71, 'von 5 Stunden')
+  ]);
+
+  const body = src.match(
+    /var PROGRESS_BAR_SELECTORS[\s\S]*?function collectProgress[\s\S]*?\n {2}\}/)[0];
+  const collect = vm.runInNewContext(
+    body + '\ncollectProgress;',
+    {
+      isFinite, Number, String, Math, Array, Object,
+      state: {mode: 'claim'},
+      document: {body: inventory},
+      INVENTORY_ROOTS: [],
+      D: {qAny: () => inventory},
+      parseProgress: vm.runInNewContext(
+        '(' + src.match(/function parseProgress[\s\S]*?\n {2}\}/)[0]
+          .replace(/^function parseProgress/, 'function') + ')',
+        {isFinite, Number, String}),
+      PROGRESS_TEXT_MAX: 60,
+      MAX_PROGRESS_ITEMS: 8
+    });
+
+  console.log('\n[drop progress on the real inventory markup]');
+  const got = collect();
+  eq('every drop card is picked up', got.length, 3);
+  eq('the percentage comes from the progress bar', got.map((g) => g.percent), [10, 5, 71]);
+  eq('the requirement comes from the caption', got.map((g) => g.hours), [1, 2, 5]);
+  eq('the name is the label in front of the bar',
+    got.map((g) => g.name), ['Common 1', 'Rare 1', 'Legendary 1']);
+}
+
 /* ------------------------------------------- ad-mute: stale marker handling */
 {
   const src = read('src/content/modules/ad-mute.js');
