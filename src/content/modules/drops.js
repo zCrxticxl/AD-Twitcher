@@ -621,10 +621,23 @@
     log.debug('drops: stopped');
   }
 
+  /**
+   * What the background asks for when it checks drops. Reading the progress
+   * here as well means the popup's own button refreshes the figures, instead of
+   * leaving the user to wait for the two-minute tick.
+   *
+   * @return {!Object} The claim report.
+   */
+  function claimNow() {
+    var report = claimAll();
+    reportProgress();
+    return report;
+  }
+
   g.ADT.modules.drops = {
     start: start,
     stop: stop,
-    claimNow: claimAll,
+    claimNow: claimNow,
     onInventoryPage: onInventoryPage
   };
   if (g.__adtLoaded) g.__adtLoaded('content/modules/drops.js');

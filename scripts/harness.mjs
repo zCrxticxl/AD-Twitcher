@@ -25,7 +25,7 @@ function lifecycleSandbox(path, page, options = {}) {
   const timeouts = new Map();
   let clicks = 0;
   class FakeDate extends Date { static now() { return now; } }
-  const body = {};
+  const body = {querySelectorAll: () => []};
   const buttonText = options.buttonText || 'Claim';
   const button = {
     tagName: 'BUTTON', isConnected: true, disabled: false,
@@ -33,10 +33,13 @@ function lifecycleSandbox(path, page, options = {}) {
     closest: () => button, querySelector: () => null,
     getAttribute: (name) => name === 'aria-disabled' ? 'false' : 'Bonus'
   };
+  // A drops root has to answer querySelectorAll: claimNow() reads the progress
+  // bars on the same pass.
+  const emptyRoot = {querySelectorAll: () => []};
   const D = {
     q: () => button,
     qAny: () => page === 'drops'
-      ? (options.legacyRoot === false ? null : {})
+      ? (options.legacyRoot === false ? null : emptyRoot)
       : button,
     qaAny: () => options.attributeMatch === false ? [] : [button],
     buttonsByText: (patterns, root) => root === body && patterns.some((pattern) =>
