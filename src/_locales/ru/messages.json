@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Поддержать разработчика на Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Подписаться на @zCrxticxl в X / Twitter" },
+  "versionTitle": { "message": "Установленная версия" },
 
   "masterToggleTitle": { "message": "Включить или выключить всё" },
   "tabStatus": { "message": "Состояние" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Контроль трансляции" },
   "optWatchHealthEnabled": { "message": "Следить за воспроизведением канала" },
   "optWatchHealthKeepAwake": { "message": "Не выгружать отслеживаемые вкладки из памяти" },
+  "optWatchHealthKeepPlaying": { "message": "Возобновлять воспроизведение, если плеер встал на паузу" },
   "optWatchHealthNotifications": { "message": "Уведомлять об остановке воспроизведения" },
   "optWatchHealthRecover": { "message": "Автоматически перезагружать зависшие вкладки" },
   "optWatchHealthStaleMinutes": { "message": "Предупредить через (мин)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Забирать готовые дропы (только на /drops/inventory)" },
   "optDropsWatchNotifications": { "message": "Реагировать на уведомление «дроп открыт»" },
   "optDropsOpenInventory": { "message": "Открывать инвентарь в фоновой вкладке" },
+  "optDropsRefresh": { "message": "Перезагружать страницу инвентаря, когда её данные устарели" },
   "optDropsInterval": { "message": "Резервная проверка (мин)" },
   "hintDrops": { "message": "Клики происходят только на странице инвентаря. Везде остальном уведомление лишь читается и никогда не нажимается, поэтому на страницах каналов пути клика не существует. Интервал - только подстраховка на случай пропущенного уведомления." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Реклама" },
   "optAdMuteEnabled": { "message": "Отключать звук во время рекламы" },
+  "optAdMuteTarget": { "message": "Отключать звук через" },
+  "optAdMuteTargetTab": { "message": "Вкладку браузера (рекомендуется)" },
+  "optAdMuteTargetPlayer": { "message": "Плеер Twitch" },
+  "optAdMuteTargetNone": { "message": "Не отключать звук" },
   "optAdMuteOverlay": { "message": "Закрывать плеер оверлеем" },
   "hintAdMute": { "message": "Это не блокировщик рекламы. Twitch вшивает рекламу в тот же поток (SSAI), поэтому блокировать нечего. Реклама продолжает идти, вы её просто не видите и не слышите." },
 

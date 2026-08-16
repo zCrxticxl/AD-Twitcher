@@ -126,9 +126,12 @@
             : { ok: false, reason: 'inactive' });
         return true;
 
+      // The report tells the background whether this page still has anything to
+      // claim, and whether its view is old enough to be hiding a finished drop.
       case 'adt:claim-drops-now':
-        if (M.drops) M.drops.claimNow();
-        sendResponse({ ok: true });
+        sendResponse(M.drops
+          ? { ok: true, report: M.drops.claimNow() }
+          : { ok: false, reason: 'inactive' });
         return true;
 
       case 'adt:get-log':

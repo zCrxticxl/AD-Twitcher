@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "通过 Buy Me a Coffee 支持开发者" },
   "twitterLinkLabel": { "message": "在 X / Twitter 上关注 @zCrxticxl" },
+  "versionTitle": { "message": "已安装的版本" },
 
   "masterToggleTitle": { "message": "全部开启或关闭" },
   "tabStatus": { "message": "状态" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "直播监控器" },
   "optWatchHealthEnabled": { "message": "监控频道播放" },
   "optWatchHealthKeepAwake": { "message": "将监控中的标签页保留在内存中" },
+  "optWatchHealthKeepPlaying": { "message": "播放器暂停时恢复播放" },
   "optWatchHealthNotifications": { "message": "播放停止时通知" },
   "optWatchHealthRecover": { "message": "自动刷新停滞的标签页" },
   "optWatchHealthStaleMinutes": { "message": "等待多少分钟后警告" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "领取已完成的掉宝（仅在 /drops/inventory）" },
   "optDropsWatchNotifications": { "message": "响应“掉宝已解锁”通知" },
   "optDropsOpenInventory": { "message": "随后在后台标签页打开物品栏" },
+  "optDropsRefresh": { "message": "库存页面内容过期时重新加载" },
   "optDropsInterval": { "message": "兜底检查（分钟）" },
   "hintDrops": { "message": "点击只发生在物品栏页面。在其他任何地方仅读取通知，绝不点击，因此频道页面上不存在点击路径。该间隔仅用于在通知被遗漏时兜底。" },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "广告" },
   "optAdMuteEnabled": { "message": "广告期间静音" },
+  "optAdMuteTarget": { "message": "静音方式" },
+  "optAdMuteTargetTab": { "message": "浏览器标签页（推荐）" },
+  "optAdMuteTargetPlayer": { "message": "Twitch 播放器" },
+  "optAdMuteTargetNone": { "message": "不静音" },
   "optAdMuteOverlay": { "message": "用遮罩覆盖播放器" },
   "hintAdMute": { "message": "这不是广告拦截器。Twitch 将广告混入同一条流（SSAI），因此不存在可拦截的请求。广告仍在播放，只是你看不到也听不到。" },
 

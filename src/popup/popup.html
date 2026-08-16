@@ -97,6 +97,10 @@
         <span data-i18n="optWatchHealthKeepAwake"></span>
       </label>
       <label class="opt">
+        <input type="checkbox" data-set="watchHealth.keepPlaying">
+        <span data-i18n="optWatchHealthKeepPlaying"></span>
+      </label>
+      <label class="opt">
         <input type="checkbox" data-set="watchHealth.notifications">
         <span data-i18n="optWatchHealthNotifications"></span>
       </label>
@@ -128,6 +132,10 @@
       <label class="opt">
         <input type="checkbox" data-set="drops.openInventoryTab">
         <span data-i18n="optDropsOpenInventory"></span>
+      </label>
+      <label class="opt">
+        <input type="checkbox" data-set="drops.refreshInventory">
+        <span data-i18n="optDropsRefresh"></span>
       </label>
       <label class="num">
         <span data-i18n="optDropsInterval"></span>
@@ -166,6 +174,14 @@
       <label class="opt">
         <input type="checkbox" data-set="adMute.enabled">
         <span data-i18n="optAdMuteEnabled"></span>
+      </label>
+      <label class="num">
+        <span data-i18n="optAdMuteTarget"></span>
+        <select data-set="adMute.muteTarget">
+          <option value="tab" data-i18n="optAdMuteTargetTab"></option>
+          <option value="player" data-i18n="optAdMuteTargetPlayer"></option>
+          <option value="none" data-i18n="optAdMuteTargetNone"></option>
+        </select>
       </label>
       <label class="opt">
         <input type="checkbox" data-set="adMute.overlay">
@@ -238,16 +254,21 @@
   </section>
 
   <footer class="creator-links">
-    <a class="creator-link creator-link--coffee"
-       href="https://buymeacoffee.com/zcrxticxl"
-       target="_blank" rel="noopener noreferrer"
-       data-i18n-title="supportLinkLabel"
-       data-i18n-aria-label="supportLinkLabel">☕ <span>Buy me a coffee</span></a>
-    <a class="creator-link"
-       href="https://x.com/zCrxticxl"
-       target="_blank" rel="noopener noreferrer"
-       data-i18n-title="twitterLinkLabel"
-       data-i18n-aria-label="twitterLinkLabel"><span>@zCrxticxl</span></a>
+    <div class="creator-links__row">
+      <a class="creator-link creator-link--coffee"
+         href="https://buymeacoffee.com/zcrxticxl"
+         target="_blank" rel="noopener noreferrer"
+         data-i18n-title="supportLinkLabel"
+         data-i18n-aria-label="supportLinkLabel">☕ <span>Buy me a coffee</span></a>
+      <a class="creator-link"
+         href="https://x.com/zCrxticxl"
+         target="_blank" rel="noopener noreferrer"
+         data-i18n-title="twitterLinkLabel"
+         data-i18n-aria-label="twitterLinkLabel"><span>@zCrxticxl</span></a>
+    </div>
+    <span class="creator-version" id="appVersion"
+          data-i18n-title="versionTitle"
+          data-i18n-aria-label="versionTitle"></span>
   </footer>
 
   <script src="../lib/browser.js"></script>

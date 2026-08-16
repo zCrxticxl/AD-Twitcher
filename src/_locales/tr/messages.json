@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Geliştiriciyi Buy Me a Coffee üzerinden destekle" },
   "twitterLinkLabel": { "message": "X / Twitter’da @zCrxticxl hesabını takip et" },
+  "versionTitle": { "message": "Yüklü sürüm" },
 
   "masterToggleTitle": { "message": "Her şeyi aç veya kapat" },
   "tabStatus": { "message": "Durum" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Yayın gözetmeni" },
   "optWatchHealthEnabled": { "message": "Kanal oynatımını izle" },
   "optWatchHealthKeepAwake": { "message": "İzlenen sekmeleri bellekte tut" },
+  "optWatchHealthKeepPlaying": { "message": "Oynatıcı duraklarsa oynatmayı sürdür" },
   "optWatchHealthNotifications": { "message": "Oynatma durduğunda bildir" },
   "optWatchHealthRecover": { "message": "Takılan sekmeleri otomatik yenile" },
   "optWatchHealthStaleMinutes": { "message": "Şu süreden sonra uyar (dk)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Tamamlanan dropları topla (yalnızca /drops/inventory üzerinde)" },
   "optDropsWatchNotifications": { "message": "„Drop açıldı” bildirimine tepki ver" },
   "optDropsOpenInventory": { "message": "Envanteri arka plan sekmesinde aç" },
+  "optDropsRefresh": { "message": "Envanter sayfasının görünümü eskidiğinde yeniden yükle" },
   "optDropsInterval": { "message": "Yedek kontrol (dk)" },
   "hintDrops": { "message": "Tıklama yalnızca envanter sayfasında olur. Başka her yerde bildirim sadece okunur, asla tıklanmaz; yani kanal sayfalarında tıklama yolu yoktur. Aralık, kaçırılan bildirimler için yalnızca bir emniyet ağıdır." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Reklamlar" },
   "optAdMuteEnabled": { "message": "Reklam sırasında sessize al" },
+  "optAdMuteTarget": { "message": "Sessize alma yöntemi" },
+  "optAdMuteTargetTab": { "message": "Tarayıcı sekmesi (önerilen)" },
+  "optAdMuteTargetPlayer": { "message": "Twitch oynatıcısı" },
+  "optAdMuteTargetNone": { "message": "Sessize alınmasın" },
   "optAdMuteOverlay": { "message": "Oynatıcıyı bir katmanla kapat" },
   "hintAdMute": { "message": "Bu bir reklam engelleyici değil. Twitch reklamı aynı akışa gömüyor (SSAI), yani engellenecek bir istek yok. Reklamlar dönmeye devam eder, siz yalnızca görmez ve duymazsınız." },
 

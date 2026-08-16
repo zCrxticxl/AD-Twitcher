@@ -30,10 +30,10 @@ all twelve caption sets rather than English only.
 
 | Module | What it does | Runs on |
 |---|---|---|
-| `watchHealth` | Detects stalled playback, protects the tab and sends a local alert | Channel pages |
+| `watchHealth` | Detects stalled playback, resumes an unrequested pause, protects the tab and sends a local alert | Channel pages |
 | `channelPoints` | Clicks the bonus chest | Channel pages |
-| `drops` | Claims finished drops (inventory) and reads the unlock notification | Everywhere |
-| `adMute` | Detects ads, mutes the player, covers it with an overlay | Channel pages |
+| `drops` | Claims finished drops (inventory, reloading a stale view first) and reads the unlock notification | Everywhere |
+| `adMute` | Detects ads, mutes the browser tab, covers the player with an overlay | Channel pages |
 | `viewerStats` | Measures viewer and chat raw values | Channel pages |
 | `sidebarWatch` | Reports live status from the followed-channels sidebar | Everywhere |
 
@@ -67,9 +67,20 @@ that uses the same Manifest V3 code and permissions as Chrome.
 **Drops are claimed, not farmed.**
 Twitch counts drop progress server-side from the running player's heartbeats.
 Nothing accumulates without an open stream. The watchdog can detect stopped
-playback, protect the tab from automatic discarding and attempt one recovery
-reload, but Twitch still decides whether viewing progress counts. The extension
-collects finished drops after Twitch marks them complete.
+playback, resume a player that paused on its own, protect the tab from
+automatic discarding and attempt one recovery reload, but Twitch still decides
+whether viewing progress counts. The extension collects finished drops after
+Twitch marks them complete.
+
+**The inventory page has to be reloaded, not rescanned.**
+Twitch renders `/drops/inventory` once, from data it fetched while the page was
+loading, and never refetches it. A tab that has been sitting open therefore
+shows the drop state of its load time: a drop that finished afterwards has no
+claim button anywhere in that DOM. That is why claiming used to need a manual
+F5. When an unlock is reported and the open inventory has nothing to claim, the
+background reloads that tab once, waits for it to come back and claims then. A
+parked inventory tab also refreshes itself once its view passes 15 minutes, but
+only while it is hidden, so nothing reloads under a reader.
 
 **`adMute` is not an ad blocker.**
 Twitch uses server-side ad insertion: the ad is muxed into the same HLS stream
@@ -79,6 +90,15 @@ from an ad-free region (TTV LOL PRO); that needs its own infrastructure, breaks
 on every Twitch update, and cuts streamer payouts. What happens here instead:
 detect the ad marker, mute, cover, restore exactly on the way out. The ads keep
 running, you just do not notice them.
+
+The mute happens on the browser tab by default, not on the `<video>` element.
+Writing `muted = true` into the player is visible to Twitch: it lands in the
+player's own store and fires `volumechange`, and a restore that does not land
+leaves the stream silent for the rest of the session. A tab mute happens
+outside the page, so the player never learns about it and the heartbeats that
+carry watch time and drop progress are untouched. A tab that was already muted
+by hand is left exactly as it is, and never unmuted afterwards. The target is
+switchable in the popup (`Mute via`: browser tab, Twitch player, or not at all).
 
 **`viewerStats` does not detect bots.**
 Twitch publishes an aggregate number and no viewer list. Whether a viewer is
