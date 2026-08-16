@@ -40,14 +40,22 @@ all twelve caption sets rather than English only.
 The background half opens and closes tabs for auto-join, runs the periodic drops
 check and owns the counters.
 
-**How much longer.** The inventory page prints how far every drop has come, so
-the claimer reads those captions while it is there and hands them to the popup,
-which turns them into a remaining time. The caption is localized and its word
-order is not: German writes "85 % von 4 Stunden", Japanese "4 時間中 85%",
-Turkish puts the sign in front of the number. Nothing parses the sentence - the
-number carrying the percent sign is the progress, the other number is the
-requirement. The estimate assumes uninterrupted watching, which is what the
-watchdog exists to keep true.
+**How much longer.** Each drop card carries an ARIA progress bar, so the
+percentage is read as a number instead of out of localized text. The caption
+next to it supplies the requirement, and the two together give a remaining time.
+Every drop is listed with its campaign, because "Common 1" identifies nothing on
+its own. Campaigns that have ended keep their progress bars, so cards whose
+reward image Twitch has dimmed are left out - unless that would empty the list.
+Ranking happens over the whole page before it is cut down: the inventory shows
+campaign after campaign, and the drop that is nearly finished is rarely in the
+first one.
+
+For the requirement the caption still has to be read, and its word order is not
+fixed: German writes "85 % von 4 Stunden", Japanese "4 時間中 85%", Turkish puts
+the sign in front of the number. Nothing parses the sentence - the number
+carrying the percent sign is the progress, the other number is the requirement.
+The remaining time assumes uninterrupted watching, which is what the watchdog
+exists to keep true.
 
 **Telling "working" from "dead".** Lifetime counters only move when something is
 actually claimed, so between two drops they prove nothing. The status tab

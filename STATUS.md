@@ -69,12 +69,18 @@ live Twitch behavior still requires manual browser sessions.
     `storage.local` on every check, including skipped and failed ones, so the
     record survives the service worker that produced it.
 17. Drop progress is read off the inventory page and shown as a remaining time,
-    closest drop first. The caption is localized and its word order is not, so
-    the parser takes the number carrying the percent sign as progress and the
-    other number as the requirement; Turkish writes the sign in front, which the
-    logic tests caught. Scraped values are validated and capped in the
-    background before they are stored, because they arrive from a content
-    script.
+    closest drop first, each with the campaign it belongs to. The percentage
+    comes from the card's ARIA progress bar rather than from its caption, which
+    is a number in every language; the caption is only read for the requirement.
+    Expired campaigns keep their bars, so cards whose reward image Twitch has
+    dimmed are dropped - unless that would empty the list, in which case they
+    stay, because a class rename must not blank the card. The requirement is
+    parsed without understanding the sentence: the number carrying the percent
+    sign is the progress, the other number the requirement, and Turkish writes
+    the sign in front, which the logic tests caught. Ranking happens over the
+    whole page before the list is capped - capping in document order kept four
+    drops that had just started and discarded one at 93 %. Scraped values are
+    validated in the background, because they arrive from a content script.
 
 ## 0.2.0
 

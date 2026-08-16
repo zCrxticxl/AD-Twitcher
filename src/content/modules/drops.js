@@ -196,8 +196,8 @@
   /** @const {number} Captions are short; anything longer is prose, not a value. */
   var PROGRESS_TEXT_MAX = 60;
 
-  /** @const {number} Kept per report, so one huge inventory cannot flood storage. */
-  var MAX_PROGRESS_ITEMS = 8;
+  /** @const {number} Upper bound on one page scan, so a huge inventory cannot stall it. */
+  var MAX_SCANNED_BARS = 60;
 
   /** @const {number} How often a snapshot is sent while the page stays open. */
   var PROGRESS_TICK_MS = 120000;
@@ -217,6 +217,20 @@
 
   /** @const {number} Longer than this is a sentence, not a drop name. */
   var NAME_MAX = 40;
+
+  /** @const {number} Campaign titles are longer than drop names, but not much. */
+  var CAMPAIGN_MAX = 60;
+
+  /** @const {string} The row of cards belonging to one campaign. */
+  var CAMPAIGN_ROW = '.tw-tower';
+
+  /**
+   * Twitch dims the image of a reward that can no longer be earned. The card
+   * keeps its progress bar, so without this the popup would rank finished
+   * campaigns against live ones.
+   * @const {string}
+   */
+  var UNAVAILABLE_MARK = 'img[class*="inventory-opacity-2"]';
 
   /**
    * @param {string} text A progress caption.
@@ -312,6 +326,51 @@
   }
 
   /**
+   * @param {!Element} bar
+   * @return {?Element} The card holding one drop: image, name, bar, caption.
+   */
+  function cardOf(bar) {
+    return (bar.parentElement && bar.parentElement.parentElement) || null;
+  }
+
+  /**
+   * @param {!Element} bar
+   * @return {string} The campaign this drop belongs to, '' when not found.
+   */
+  function campaignName(bar) {
+    if (typeof bar.closest !== 'function') return '';
+    var row;
+    try {
+      row = bar.closest(CAMPAIGN_ROW);
+    } catch (e) {
+      return '';
+    }
+    // The campaign block holds its title, its end date and the row of cards.
+    var block = row && row.parentElement && row.parentElement.parentElement;
+    if (!block) return '';
+
+    var nodes = block.querySelectorAll('p, span, h1, h2, h3, h4, h5');
+    for (var i = 0; i < nodes.length; i++) {
+      var text = (nodes[i].textContent || '').trim();
+      if (text && text.length <= CAMPAIGN_MAX && text.indexOf('%') < 0) return text;
+    }
+    return '';
+  }
+
+  /**
+   * @param {?Element} card
+   * @return {boolean}
+   */
+  function cardIsUnavailable(card) {
+    if (!card || typeof card.querySelector !== 'function') return false;
+    try {
+      return !!card.querySelector(UNAVAILABLE_MARK);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
    * @return {!Array<!Object>} One entry per drop in progress.
    */
   function collectProgress() {
@@ -321,7 +380,13 @@
     var out = [];
     var seen = [];
 
-    for (var i = 0; i < bars.length && out.length < MAX_PROGRESS_ITEMS; i++) {
+    /*
+     * Every bar on the page, not the first few. The inventory lists campaign
+     * after campaign, so a cap applied here in document order throws away the
+     * drop that is nearly finished further down and keeps four that just
+     * started. Ranking happens once everything is in.
+     */
+    for (var i = 0; i < bars.length && out.length < MAX_SCANNED_BARS; i++) {
       var bar = bars[i];
       if (seen.indexOf(bar) >= 0) continue;     // Both selectors can hit one bar.
       seen.push(bar);
@@ -334,11 +399,27 @@
 
       out.push({
         name: cardName(bar),
+        campaign: campaignName(bar),
         percent: percent,
-        hours: parsed ? parsed.hours : 0
+        hours: parsed ? parsed.hours : 0,
+        gone: cardIsUnavailable(cardOf(bar))
       });
     }
-    return out;
+
+    /*
+     * Drop the expired campaigns, but never all of them: if Twitch renames the
+     * class this reads, an empty card would be a worse answer than a slightly
+     * too long list.
+     */
+    var live = out.filter(function (item) { return !item.gone; });
+    return (live.length ? live : out).map(function (item) {
+      return {
+        name: item.name,
+        campaign: item.campaign,
+        percent: item.percent,
+        hours: item.hours
+      };
+    });
   }
 
   /** Sends the current progress snapshot, if the page has one. */

@@ -667,6 +667,24 @@ console.log('\n[20] Drop progress');
     ? ok('the background validates and caps what the page reported')
     : fail('background/sw.js trusts the scraped progress unchecked');
 
+  /*
+   * The inventory lists campaign after campaign. Capping in document order
+   * before ranking keeps four drops that just started and throws away the one
+   * that is nearly finished further down the page.
+   */
+  /\.sort\(function \(a, b\) \{\s*\n\s*return remainingMs\(a\) - remainingMs\(b\);/.test(sw) &&
+      sw.indexOf('.sort(') < sw.indexOf('slice(0, MAX_PROGRESS_ITEMS)')
+    ? ok('progress is ranked before it is capped')
+    : fail('background/sw.js caps the progress list before ranking it');
+
+  /function campaignName/.test(drops) && /CAMPAIGN_ROW/.test(drops)
+    ? ok('each drop is reported with its campaign')
+    : fail('drops.js reports drop names without their campaign');
+
+  /function cardIsUnavailable/.test(drops) && /live\.length \? live : out/.test(drops)
+    ? ok('finished campaigns are dropped, but never the whole list')
+    : fail('drops.js either keeps expired drops or can filter everything away');
+
   /createElement\('div'\)/.test(js) && !/dpList[^\n]*innerHTML/.test(js)
     ? ok('progress rows are built as nodes, not as markup')
     : fail('popup.js builds progress rows from a string');

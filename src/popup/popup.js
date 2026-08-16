@@ -302,6 +302,15 @@
       var name = document.createElement('span');
       name.textContent = item.name || ADT.msg('dropUnnamed');
 
+      // "Common 1" means nothing on its own; the campaign is what identifies it.
+      if (item.campaign) {
+        var campaign = document.createElement('small');
+        campaign.className = 'muted';
+        campaign.textContent = item.campaign;
+        name.appendChild(document.createElement('br'));
+        name.appendChild(campaign);
+      }
+
       var value = document.createElement('b');
       var left = remainingMs(item);
       value.textContent = ADT.formatNumber(Math.round(item.percent)) + ' % · ' +
@@ -327,7 +336,9 @@
    * @return {number} Milliseconds left, or 0 when the requirement is unknown.
    */
   function remainingMs(item) {
-    if (!item || !item.hours) return 0;
+    // Unknown requirement sorts last: 0 would put it in front of a drop that
+    // really is nearly finished.
+    if (!item || !item.hours) return Infinity;
     return Math.max(0, item.hours * 3600000 * (1 - (item.percent || 0) / 100));
   }
 
