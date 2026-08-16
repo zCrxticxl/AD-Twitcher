@@ -44,8 +44,10 @@ check and owns the counters.
 percentage is read as a number instead of out of localized text. The caption
 next to it supplies the requirement, and the two together give a remaining time.
 Every drop is listed with its campaign, because "Common 1" identifies nothing on
-its own. Campaigns that have ended keep their progress bars, so cards whose
-reward image Twitch has dimmed are left out - unless that would empty the list.
+its own - two campaigns can even run under the same title with the same reward
+tiers. Campaigns that have ended keep their progress bars, so cards whose reward
+image Twitch has dimmed are left out, as are drops already at 100 %, which have
+no remaining time to report. The dimmed-image filter never empties the list.
 Ranking happens over the whole page before it is cut down: the inventory shows
 campaign after campaign, and the drop that is nearly finished is rarely in the
 first one.

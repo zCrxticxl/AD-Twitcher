@@ -74,7 +74,12 @@ live Twitch behavior still requires manual browser sessions.
     is a number in every language; the caption is only read for the requirement.
     Expired campaigns keep their bars, so cards whose reward image Twitch has
     dimmed are dropped - unless that would empty the list, in which case they
-    stay, because a class rename must not blank the card. The requirement is
+    stay, because a class rename must not blank the card. Drops at 100 % are
+    left out as well: they are claimed or waiting for the claimer, and either
+    way they have no remaining time. Two campaigns can run under the same title
+    with the same reward tiers, so a tier repeated within one campaign is
+    reduced to its furthest entry while the same tier in a different campaign
+    stays. The requirement is
     parsed without understanding the sentence: the number carrying the percent
     sign is the progress, the other number the requirement, and Turkish writes
     the sign in front, which the logic tests caught. Ranking happens over the

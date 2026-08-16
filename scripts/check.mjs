@@ -681,9 +681,15 @@ console.log('\n[20] Drop progress');
     ? ok('each drop is reported with its campaign')
     : fail('drops.js reports drop names without their campaign');
 
-  /function cardIsUnavailable/.test(drops) && /live\.length \? live : out/.test(drops)
+  /function cardIsUnavailable/.test(drops) && /if \(!live\.length\) live = out;/.test(drops)
     ? ok('finished campaigns are dropped, but never the whole list')
     : fail('drops.js either keeps expired drops or can filter everything away');
+
+  // A drop at 100 % is claimed or waiting for the claimer. Either way it has no
+  // remaining time, and it would occupy a row that a pending drop needs.
+  /item\.percent >= 100/.test(drops)
+    ? ok('drops that are already finished are not listed as pending')
+    : fail('drops.js ranks finished drops against pending ones');
 
   /createElement\('div'\)/.test(js) && !/dpList[^\n]*innerHTML/.test(js)
     ? ok('progress rows are built as nodes, not as markup')
