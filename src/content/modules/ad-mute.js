@@ -13,6 +13,14 @@
  * because a live stream has no buffer beyond the live edge. Those seconds are
  * real wall time. What happens here is detect, mute, cover, restore.
  *
+ * Where the mute happens matters more than it looks. Writing muted = true on
+ * the <video> element is visible to Twitch: the player writes the state into
+ * its own store, fires volumechange, and one restore that does not land leaves
+ * the stream silent for the rest of the session. Muting the browser tab instead
+ * happens entirely outside the page, so the player never learns about it and
+ * the heartbeats that carry watch time and drop progress keep flowing. That is
+ * the default; settings.adMute.muteTarget can still pick 'player' or 'none'.
+ *
  * Performance is load-bearing in this file. The first revision attached a
  * MutationObserver to document.body, which fires more or less continuously
  * while chat is active, and ran seven querySelector calls plus
@@ -81,6 +89,7 @@
     player: null,
     video: null,
     volumeHandler: null,
+    tabMuted: false,
     adActive: false,
     lastSeenAd: 0,
     lastAdEnd: 0,
@@ -92,6 +101,12 @@
     foregroundHandler: null,
     recoveryTimer: null
   };
+
+  /** @return {string} 'tab', 'player' or 'none'. */
+  function muteTarget() {
+    var target = state.cfg && state.cfg.muteTarget;
+    return (target === 'player' || target === 'none') ? target : 'tab';
+  }
 
   /* ------------------------------------------------- cached node access */
 
@@ -175,7 +190,8 @@
     count.textContent = g.ADT.msg('overlayWaiting');
 
     box.appendChild(title);
-    box.appendChild(sub);
+    // The subtitle claims the ad is muted. Only true when something is.
+    if (muteTarget() !== 'none') box.appendChild(sub);
     box.appendChild(count);
 
     var el = document.createElement('div');
@@ -332,16 +348,61 @@
     state.volumeHandler = null;
   }
 
+  /**
+   * Asks the background to mute the tab itself. It refuses when the tab is
+   * already silent, so a tab the user muted by hand is never unmuted later.
+   *
+   * The flag is set before the answer arrives on purpose. A redundant unmute
+   * costs nothing, the background checks its own record; a skipped one leaves
+   * the tab silent, which is the failure this whole path exists to avoid.
+   *
+   * @param {boolean} muted
+   */
+  function requestTabMute(muted) {
+    state.tabMuted = muted;
+    g.ADT.send({ type: 'adt:tab-mute', muted: muted });
+  }
+
+  /** Silences the ad wherever settings say it should happen. */
+  function applyMute() {
+    var target = muteTarget();
+    if (target === 'none') return;
+
+    if (target === 'tab') {
+      requestTabMute(true);
+      return;
+    }
+
+    var v = video();
+    if (!v) return;
+    state.saved = { muted: v.muted, volume: v.volume };
+    v.muted = true;
+    attachVolumeGuard(v);
+  }
+
+  /** Undoes exactly what applyMute did, whichever layer that was. */
+  function releaseMute() {
+    if (state.tabMuted) requestTabMute(false);
+    detachVolumeGuard();
+
+    var v = video();
+    if (v && state.saved && state.cfg.restoreVolume) {
+      v.muted = state.saved.muted;
+      if (typeof state.saved.volume === 'number' && v.volume === 0) {
+        v.volume = state.saved.volume;
+      }
+    }
+    state.saved = null;
+  }
+
   function enterAd() {
     var v = video();
     if (!v) return;
 
     clearRecoveryTimer();
     state.adActive = true;
-    state.saved = { muted: v.muted, volume: v.volume };
     releaseTwitchPlaceholder();
-    v.muted = true;
-    attachVolumeGuard(v);
+    applyMute();
 
     buildOverlay();
     if (!state.countdownTimer) {
@@ -352,7 +413,7 @@
     // Do not count the same ad twice when the module restarts mid-break.
     if (Date.now() - state.lastAdEnd > RECOUNT_GRACE_MS) {
       g.ADT.countStat('adsMuted');
-      log.info('Ad detected, player muted');
+      log.info('Ad detected, mute target: ' + muteTarget());
     } else {
       log.debug('Ad still running after restart, not counted again');
     }
@@ -367,17 +428,12 @@
       clearInterval(state.countdownTimer);
       state.countdownTimer = null;
     }
-    detachVolumeGuard();
     removeOverlay();
     if (!preserveTwitchUi) hideStaleTwitchPlaceholder();
 
+    releaseMute();
+
     var v = video();
-    if (v && state.saved && state.cfg.restoreVolume) {
-      v.muted = state.saved.muted;
-      if (typeof state.saved.volume === 'number' && v.volume === 0) {
-        v.volume = state.saved.volume;
-      }
-    }
     if (!preserveTwitchUi && v && v.paused && typeof v.play === 'function') {
       try {
         var resume = v.play();
@@ -386,7 +442,6 @@
         // Twitch will retry playback itself if the browser blocks autoplay.
       }
     }
-    state.saved = null;
     if (!preserveTwitchUi) schedulePlaybackRecovery();
     log.info('Ad finished, audio restored');
   }
@@ -420,11 +475,14 @@
 
     // The ad can outlive the old player node. Move both protection layers to
     // the replacement without overwriting the user's pre-ad volume snapshot.
+    // A tab mute survives the swap by itself, there is nothing to move.
     if (state.adActive) {
-      var v = video();
-      if (v) {
-        v.muted = true;
-        attachVolumeGuard(v);
+      if (muteTarget() === 'player') {
+        var v = video();
+        if (v) {
+          v.muted = true;
+          attachVolumeGuard(v);
+        }
       }
       buildOverlay();
     }
@@ -522,6 +580,8 @@
       state.foregroundHandler = null;
     }
     if (state.adActive) exitAd(true);
+    // Belt and braces: a tab must never stay muted because a module went away.
+    if (state.tabMuted) requestTabMute(false);
     detachVolumeGuard();
     state.player = null;
     state.video = null;

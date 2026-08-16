@@ -19,6 +19,12 @@
  *  [10] every referenced message key exists, and no key is dead
  *  [11] delayed click paths are cancelled and revalidate lifecycle state
  *  [12] popup sizing cannot collapse in Firefox
+ *  [13] ad state, and the mute it applies, cannot outlive the ad
+ *  [14] the watchdog measures playback and keeps it running
+ *  [15] lifetime statistics persist and are presented
+ *  [16] creator links point where they claim to
+ *  [17] a stale inventory view is reloaded instead of scanned again
+ *  [18] the popup shows the installed version, read from the manifest
  */
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -420,6 +426,39 @@ console.log('\n[13] Ad marker lifecycle');
       /location\.reload\(\)/.test(adMute)
     ? ok('stalled post-ad playback triggers one cooldown-protected reload')
     : fail('post-ad player stalls have no automatic recovery fallback');
+
+  /*
+   * Muting the <video> element is visible to Twitch and a restore that does not
+   * land costs the rest of the session's watch time. The default therefore
+   * mutes the tab from the background, where the page cannot see it, and the
+   * player path must stay behind the muteTarget switch.
+   */
+  const swMute = await readFile(join(SRC, 'background/sw.js'), 'utf8');
+  /function muteTarget/.test(adMute) && /'adt:tab-mute'/.test(adMute) &&
+      /muteTarget\(\) === 'player'/.test(adMute)
+    ? ok('ad mute can silence the tab without touching the player')
+    : fail('ad-mute.js has no browser-level mute path');
+
+  const storageDefaults = await readFile(join(SRC, 'lib/storage.js'), 'utf8');
+  /muteTarget:\s*'tab'/.test(storageDefaults)
+    ? ok('the tab is the default mute target')
+    : fail('lib/storage.js: adMute.muteTarget does not default to the tab');
+
+  /mutedInfo/.test(swMute) && /function mutedByUs/.test(swMute) &&
+      /function releaseTabMute/.test(swMute)
+    ? ok('only a mute the extension set is ever released')
+    : fail('background/sw.js can unmute a tab the user muted by hand');
+
+  // An ad break outlives the MV3 worker, so a mute recorded in a variable is a
+  // tab that stays silent for good.
+  /MUTE_RT_KEY/.test(swMute) && /api\.storage\.local\.set/.test(swMute) &&
+      /function sweepTabMutes/.test(swMute)
+    ? ok('ad mutes survive a worker restart and expire on their own')
+    : fail('background/sw.js keeps its ad mutes in memory only');
+
+  /changeInfo\.status !== 'loading'/.test(swMute)
+    ? ok('a navigating tab does not keep an orphaned mute')
+    : fail('background/sw.js leaves the tab muted when the page navigates away');
 }
 
 console.log('\n[14] Stream watchdog');
@@ -441,6 +480,25 @@ console.log('\n[14] Stream watchdog');
       /api\.tabs\.reload/.test(background)
     ? ok('watchdog protects, notifies and recovers stream tabs')
     : fail('watchdog recovery path is incomplete');
+
+  /*
+   * A paused player earns no watch time and no drop progress. Everything except
+   * a pause the user asked for has to be taken back, and the resume path needs
+   * a ceiling so a player that refuses to start cannot spin.
+   */
+  /function resume\(/.test(content) && /keepPlaying/.test(content) &&
+      /USER_INTENT_MS/.test(content) && /state\.userPaused/.test(content)
+    ? ok('an unrequested pause is resumed, a user pause is not')
+    : fail('watchdog does not keep the player running');
+
+  /MAX_RESUMES_PER_MIN/.test(content)
+    ? ok('automatic resumes are capped per minute')
+    : fail('the resume path has no ceiling');
+
+  /removeEventListener\('pointerdown'/.test(content) &&
+      /removeEventListener\('keydown'/.test(content)
+    ? ok('pause guard input listeners are removed on stop')
+    : fail('watch-health leaks its user-input listeners');
 }
 
 console.log('\n[15] Lifetime statistics');
@@ -467,6 +525,66 @@ console.log('\n[16] Creator links');
   coffee && twitter && safeTargets
     ? ok('support and social links use exact safe external targets')
     : fail('creator links are missing, incorrect, or open unsafely');
+}
+
+console.log('\n[17] Drops inventory freshness');
+{
+  /*
+   * Twitch renders the inventory once, from data fetched at load time, and
+   * never refetches it. A drop that finishes afterwards has no claim button in
+   * that DOM, which is exactly why claiming used to need a manual F5. Scanning
+   * cannot fix that, only a reload, and that reload needs a cooldown.
+   */
+  const drops = await readFile(join(SRC, 'content/modules/drops.js'), 'utf8');
+  const sw = await readFile(join(SRC, 'background/sw.js'), 'utf8');
+  const index = await readFile(join(SRC, 'content/index.js'), 'utf8');
+
+  /STALE_VIEW_MS/.test(drops) && /function viewIsStale/.test(drops) &&
+      /stale: viewIsStale\(\)/.test(drops)
+    ? ok('the claim scan reports how old its view is')
+    : fail('drops.js cannot tell a current inventory from a stale one');
+
+  /report: M\.drops\.claimNow\(\)/.test(index)
+    ? ok('the report reaches the background')
+    : fail('content/index.js swallows the claim report');
+
+  /function refreshInventoryTab/.test(sw) && /api\.tabs\.reload/.test(sw) &&
+      /INVENTORY_RELOAD_COOLDOWN_MS/.test(sw)
+    ? ok('a stale inventory tab is reloaded once, then claimed')
+    : fail('background/sw.js still expects a manual reload of the inventory');
+
+  /report\.stale === false/.test(sw)
+    ? ok('a current inventory with nothing to claim is left alone')
+    : fail('background/sw.js reloads the inventory unconditionally');
+
+  /function refreshStaleView/.test(drops) &&
+      /visibilityState !== 'hidden'/.test(drops)
+    ? ok('a parked inventory tab refreshes itself, a watched one does not')
+    : fail('drops.js can reload the inventory while the user is reading it');
+}
+
+console.log('\n[18] Version badge');
+{
+  /*
+   * A version printed into the markup is a version that goes stale on the next
+   * release. The badge has to read the manifest, which build.mjs stamps from
+   * package.json, so what the popup shows is what is installed.
+   */
+  const html = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
+  const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+
+  /id="appVersion"/.test(html)
+    ? ok('the popup footer carries a version slot')
+    : fail('popup.html has no version element');
+
+  /function renderVersion/.test(js) && /getManifest\(\)/.test(js) &&
+      /'v' \+ version/.test(js)
+    ? ok('the badge is filled from the manifest at runtime')
+    : fail('the version badge does not read the manifest');
+
+  /<span class="creator-version"[^>]*><\/span>/.test(html)
+    ? ok('no version number is hardcoded in the markup')
+    : fail('popup.html hardcodes a version that will go stale');
 }
 
 console.log(errors ? `\n${errors} problem(s).\n` : '\nAll clean.\n');

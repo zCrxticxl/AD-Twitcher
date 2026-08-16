@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Support the developer on Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Follow @zCrxticxl on X / Twitter" },
+  "versionTitle": { "message": "Installed version" },
 
   "masterToggleTitle": { "message": "Turn everything on or off" },
   "tabStatus": { "message": "Status" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Stream watchdog" },
   "optWatchHealthEnabled": { "message": "Monitor channel playback" },
   "optWatchHealthKeepAwake": { "message": "Keep monitored tabs in memory" },
+  "optWatchHealthKeepPlaying": { "message": "Resume playback when the player pauses" },
   "optWatchHealthNotifications": { "message": "Notify when playback stops" },
   "optWatchHealthRecover": { "message": "Reload stalled tabs automatically" },
   "optWatchHealthStaleMinutes": { "message": "Warn after (min)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Claim finished drops (only on /drops/inventory)" },
   "optDropsWatchNotifications": { "message": "React to the “drop unlocked” notification" },
   "optDropsOpenInventory": { "message": "Then open the inventory in a background tab" },
+  "optDropsRefresh": { "message": "Reload the inventory page when its view is out of date" },
   "optDropsInterval": { "message": "Fallback check (min)" },
   "hintDrops": { "message": "Clicks happen on the inventory page only. Everywhere else the notification is read, never clicked, so no click path exists on channel pages. The interval is a safety net for missed notifications." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Ads" },
   "optAdMuteEnabled": { "message": "Mute during ads" },
+  "optAdMuteTarget": { "message": "Mute via" },
+  "optAdMuteTargetTab": { "message": "Browser tab (recommended)" },
+  "optAdMuteTargetPlayer": { "message": "Twitch player" },
+  "optAdMuteTargetNone": { "message": "Do not mute" },
   "optAdMuteOverlay": { "message": "Cover the player with an overlay" },
   "hintAdMute": { "message": "Not an ad blocker. Twitch stitches ads into the same stream (SSAI), so there is no request to block. Ads keep playing, you just do not see or hear them." },
 
