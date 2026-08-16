@@ -1,6 +1,6 @@
 # AD-Twitcher - status and handover
 
-Version 1.0.6, 13 August 2026.
+Version 1.0.7, 17 August 2026.
 
 ## Verification status
 
