@@ -202,8 +202,21 @@
   /** @const {number} How often a snapshot is sent while the page stays open. */
   var PROGRESS_TICK_MS = 120000;
 
+  /**
+   * Twitch's own progress bar. `role` is the load-bearing one; the class is a
+   * component name that has outlived several redesigns, kept as a fallback.
+   * @const {!Array<string>}
+   */
+  var PROGRESS_BAR_SELECTORS = ['[role="progressbar"]', '.tw-progress-bar'];
+
+  /** @const {number} Ancestors searched for the caption next to a bar. */
+  var CAPTION_LOOKUP_DEPTH = 2;
+
   /** @const {number} Ancestors searched for the drop's name. */
-  var NAME_LOOKUP_DEPTH = 4;
+  var CARD_LOOKUP_DEPTH = 3;
+
+  /** @const {number} Longer than this is a sentence, not a drop name. */
+  var NAME_MAX = 40;
 
   /**
    * @param {string} text A progress caption.
@@ -231,22 +244,69 @@
   }
 
   /**
-   * @param {!Element} caption
-   * @return {string} The drop's name, or '' when the layout hides it.
+   * The percentage does not have to be read out of text at all: Twitch renders
+   * each drop with a real ARIA progress bar. That is a number, in every
+   * language, and it stays correct when the caption is rewritten.
+   *
+   * @param {!Element} bar
+   * @return {?number} 0..100, or null when the bar carries no value.
    */
-  function progressName(caption) {
-    var node = caption;
-    for (var up = 0; up < NAME_LOOKUP_DEPTH && node; up++) {
+  function barPercent(bar) {
+    var now = Number(bar.getAttribute('aria-valuenow'));
+    if (!isFinite(now)) return null;
+    var max = Number(bar.getAttribute('aria-valuemax'));
+    if (!isFinite(max) || max <= 0) max = 100;
+    return Math.max(0, Math.min(100, (now / max) * 100));
+  }
+
+  /**
+   * The caption sits next to the bar and is the only place the requirement
+   * appears: "10 % von 1 Stunde". Twitch splits the number into its own span,
+   * so this reads the container's text rather than a leaf.
+   *
+   * @param {!Element} bar
+   * @return {string}
+   */
+  function captionNear(bar) {
+    var node = bar.parentElement;
+    for (var up = 0; up < CAPTION_LOOKUP_DEPTH && node; up++) {
+      var nodes = node.querySelectorAll('p, span, div');
+      for (var i = 0; i < nodes.length; i++) {
+        var text = (nodes[i].textContent || '').trim();
+        if (text && text.length <= PROGRESS_TEXT_MAX && text.indexOf('%') >= 0) {
+          return text;
+        }
+      }
       node = node.parentElement;
-      if (!node) break;
-      var texts = Array.prototype.slice
-        .call(node.querySelectorAll('p, span, div, h1, h2, h3, h4, h5'))
-        .filter(function (n) { return !n.children.length; })
-        .map(function (n) { return (n.textContent || '').trim(); })
-        .filter(function (t) {
-          return t && t.indexOf('%') < 0 && t.length <= 40;
-        });
-      if (texts.length) return texts[0];
+    }
+    return '';
+  }
+
+  /**
+   * The drop's name is the last short label before its bar. Going by position
+   * rather than by class name survives Twitch regenerating those, and skips the
+   * longer status sentences that share the card.
+   *
+   * @param {!Element} bar
+   * @return {string} '' when nothing name-shaped precedes the bar.
+   */
+  function cardName(bar) {
+    var card = bar.parentElement;
+    for (var up = 0; up < CARD_LOOKUP_DEPTH && card; up++) {
+      var nodes = card.querySelectorAll('p, span, h1, h2, h3, h4, h5');
+      var found = '';
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        // 4 is DOCUMENT_POSITION_FOLLOWING: stop once the bar is no longer
+        // ahead of the candidate, so the caption itself cannot win.
+        if (el.compareDocumentPosition &&
+            !(el.compareDocumentPosition(bar) & 4)) break;
+        var text = (el.textContent || '').trim();
+        if (!text || text.length > NAME_MAX || text.indexOf('%') >= 0) continue;
+        found = text;
+      }
+      if (found) return found;
+      card = card.parentElement;
     }
     return '';
   }
@@ -257,21 +317,25 @@
   function collectProgress() {
     if (state.mode !== 'claim') return [];
     var root = D.qAny(INVENTORY_ROOTS) || document.body;
-    var nodes = root.querySelectorAll('p, span, div');
+    var bars = root.querySelectorAll(PROGRESS_BAR_SELECTORS.join(','));
     var out = [];
+    var seen = [];
 
-    for (var i = 0; i < nodes.length && out.length < MAX_PROGRESS_ITEMS; i++) {
-      var el = nodes[i];
-      if (el.children.length) continue;               // Leaf captions only.
-      var text = (el.textContent || '').trim();
-      if (!text || text.length > PROGRESS_TEXT_MAX || text.indexOf('%') < 0) continue;
+    for (var i = 0; i < bars.length && out.length < MAX_PROGRESS_ITEMS; i++) {
+      var bar = bars[i];
+      if (seen.indexOf(bar) >= 0) continue;     // Both selectors can hit one bar.
+      seen.push(bar);
 
-      var parsed = parseProgress(text);
-      if (!parsed) continue;
+      var caption = captionNear(bar);
+      var parsed = parseProgress(caption);
+      var percent = barPercent(bar);
+      if (percent === null && parsed) percent = parsed.percent;
+      if (percent === null) continue;
+
       out.push({
-        name: progressName(el),
-        percent: parsed.percent,
-        hours: parsed.hours
+        name: cardName(bar),
+        percent: percent,
+        hours: parsed ? parsed.hours : 0
       });
     }
     return out;
