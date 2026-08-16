@@ -551,9 +551,11 @@ console.log('\n[lifecycle harness]');
   // untrusted input rather than as its own data.
   const h = swSandbox({}, {});
 
+  // Deliberately unsorted, and the near-finished one is not first: ranking has
+  // to happen over the whole report, not over whatever arrived first.
   h.send({type: 'adt:drops-progress', items: [
-    {name: 'Rare 2', percent: 85, hours: 4},
     {name: 'x'.repeat(200), percent: 12, hours: 6},
+    {name: 'Rare 2', percent: 85, hours: 4},
     {name: 'broken', percent: 400, hours: 1},
     {name: 'no requirement', percent: 30, hours: 0}
   ]}, 5);
@@ -561,6 +563,8 @@ console.log('\n[lifecycle harness]');
 
   const stored = h.storage.dropsProgress;
   assert('a progress report is stored', !!stored && stored.items.length === 3);
+  assert('the drop closest to finished is ranked first',
+    stored.items[0].name === 'Rare 2');
   assert('an impossible percentage is dropped',
     !stored.items.some((i) => i.percent > 100));
   assert('an overlong name is cut', stored.items[1].name.length === 60);

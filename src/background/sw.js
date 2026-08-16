@@ -339,8 +339,18 @@
   /** @const {string} Latest progress snapshot scraped off the inventory page. */
   var PROGRESS_KEY = 'dropsProgress';
 
-  /** @const {number} */
-  var MAX_PROGRESS_ITEMS = 8;
+  /** @const {number} Stored per snapshot, after ranking, never before. */
+  var MAX_PROGRESS_ITEMS = 20;
+
+  /**
+   * @param {!Object} item
+   * @return {number} Milliseconds left. A drop whose requirement is unknown
+   *     sorts last rather than first, because 0 would read as "almost done".
+   */
+  function remainingMs(item) {
+    if (!item.hours) return Infinity;
+    return item.hours * 3600000 * (1 - (item.percent || 0) / 100);
+  }
 
   /**
    * Takes what the inventory page showed and keeps it until a newer reading
@@ -357,14 +367,17 @@
     var clean = items.filter(function (item) {
       return item && typeof item.percent === 'number' &&
         isFinite(item.percent) && item.percent >= 0 && item.percent <= 100;
-    }).slice(0, MAX_PROGRESS_ITEMS).map(function (item) {
+    }).map(function (item) {
       var hours = Number(item.hours);
       return {
         name: String(item.name || '').slice(0, 60),
+        campaign: String(item.campaign || '').slice(0, 60),
         percent: Math.round(item.percent * 10) / 10,
         hours: isFinite(hours) && hours > 0 ? hours : 0
       };
-    });
+    }).sort(function (a, b) {
+      return remainingMs(a) - remainingMs(b);   // Nearest to finished first.
+    }).slice(0, MAX_PROGRESS_ITEMS);
     if (!clean.length) return Promise.resolve();
 
     var out = {};

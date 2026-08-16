@@ -353,14 +353,34 @@ function evalFragment(source, pattern, tail, context = {}) {
       descendants() {
         return this.children.flatMap((c) => [c, ...c.descendants()]);
       },
-      querySelectorAll(selector) {
+      matches(selector) {
         // Tag matching is case-insensitive in HTML documents, like the real one.
-        const wanted = selector.split(',').map((s) => s.trim().toLowerCase());
-        return this.descendants().filter((n) =>
-          wanted.includes(n.tagName.toLowerCase()) ||
-          wanted.some((w) => w.startsWith('.') && n.attrs.class === w.slice(1)) ||
-          wanted.some((w) => w.startsWith('[role=') &&
-            n.attrs.role === w.slice(7, -2)));
+        const classes = String(this.attrs.class || '').split(/\s+/);
+        return selector.split(',').map((s) => s.trim().toLowerCase()).some((w) => {
+          if (w === this.tagName.toLowerCase()) return true;
+          if (w.startsWith('.')) return classes.includes(w.slice(1));
+          if (w.startsWith('[role=')) return this.attrs.role === w.slice(7, -2);
+          const sub = w.match(/^([a-z]*)\[class\*="([^"]+)"\]$/);
+          if (sub) {
+            return (!sub[1] || this.tagName.toLowerCase() === sub[1]) &&
+              String(this.attrs.class || '').includes(sub[2]);
+          }
+          return false;
+        });
+      },
+      querySelectorAll(selector) {
+        return this.descendants().filter((n) => n.matches(selector));
+      },
+      querySelector(selector) {
+        return this.querySelectorAll(selector)[0] || null;
+      },
+      closest(selector) {
+        let node = this;
+        while (node) {
+          if (node.matches(selector)) return node;
+          node = node.parentElement;
+        }
+        return null;
       },
       compareDocumentPosition(other) {
         return other.order > this.order ? 4 : 2;
@@ -372,9 +392,14 @@ function evalFragment(source, pattern, tail, context = {}) {
 
   // <p><span>10</span>&nbsp;% von 1 Stunde</p>, no-break space included: the
   // parser must not need to clean it, because s already covers it.
-  const card = (name, valuenow, requirement) => el('DIV', {}, [
+  const card = (name, valuenow, requirement, gone) => el('DIV', {}, [
     el('DIV', {}, [
-      el('DIV', {}, [el('P', {}, ['Diese Belohnung ist nicht mehr verfügbar.'])]),
+      el('DIV', {}, [el('IMG', {attrs: {class: gone
+        ? 'inventory-drop-image inventory-opacity-2 tw-image'
+        : 'inventory-drop-image inventory-opacity-1 tw-image'}})]),
+      gone
+        ? el('DIV', {}, [el('P', {}, ['Diese Belohnung ist nicht mehr verfügbar.'])])
+        : el('DIV', {}, []),
       el('DIV', {}, [el('P', {}, [name])])
     ]),
     el('DIV', {}, [
@@ -386,10 +411,30 @@ function evalFragment(source, pattern, tail, context = {}) {
     ])
   ]);
 
+  // Title, end date, then the tower that holds this campaign's cards.
+  const campaign = (title, cards) => el('DIV', {}, [
+    el('DIV', {}, [
+      el('P', {}, [title]),
+      el('P', {}, ['Ende: Mo., 24. Aug., 15:00 MESZ'])
+    ]),
+    // The generated hash in front is exactly why nothing may match on it.
+    el('DIV', {}, [
+      el('DIV', {attrs: {class: 'ScTower-sc-1sjzzes-0 gBmiMA tw-tower'}}, cards)
+    ])
+  ]);
+
+  // Two campaigns, the first one finished. Its cards still carry progress
+  // bars, which is what pushed four irrelevant drops in front of a 93 % one.
   const inventory = el('DIV', {}, [
-    card('Common 1', 10, 'von 1 Stunde'),
-    card('Rare 1', 5, 'von 2 Stunden'),
-    card('Legendary 1', 71, 'von 5 Stunden')
+    campaign('KORD BREACH S1 Drops', [
+      card('Common 1', 10, 'von 1 Stunde', true),
+      card('Rare 1', 5, 'von 2 Stunden', true)
+    ]),
+    campaign('EWC 2026', [
+      card('EWC 2026 (Bronze)', 18, 'von 1 Stunde', false),
+      card('EWC 2026 (Diamond)', 1, 'von 12 Stunden', false),
+      card('Rare 2', 93, 'von 4 Stunden', false)
+    ])
   ]);
 
   const body = src.match(
@@ -407,16 +452,19 @@ function evalFragment(source, pattern, tail, context = {}) {
           .replace(/^function parseProgress/, 'function') + ')',
         {isFinite, Number, String}),
       PROGRESS_TEXT_MAX: 60,
-      MAX_PROGRESS_ITEMS: 8
+      MAX_SCANNED_BARS: 60
     });
 
   console.log('\n[drop progress on the real inventory markup]');
   const got = collect();
-  eq('every drop card is picked up', got.length, 3);
-  eq('the percentage comes from the progress bar', got.map((g) => g.percent), [10, 5, 71]);
-  eq('the requirement comes from the caption', got.map((g) => g.hours), [1, 2, 5]);
+  eq('a finished campaign is left out', got.length, 3);
+  eq('the percentage comes from the progress bar',
+    got.map((g) => g.percent), [18, 1, 93]);
+  eq('the requirement comes from the caption', got.map((g) => g.hours), [1, 12, 4]);
   eq('the name is the label in front of the bar',
-    got.map((g) => g.name), ['Common 1', 'Rare 1', 'Legendary 1']);
+    got.map((g) => g.name), ['EWC 2026 (Bronze)', 'EWC 2026 (Diamond)', 'Rare 2']);
+  eq('every drop carries its campaign',
+    got.map((g) => g.campaign), ['EWC 2026', 'EWC 2026', 'EWC 2026']);
 }
 
 /* ------------------------------------------- ad-mute: stale marker handling */
