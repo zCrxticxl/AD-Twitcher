@@ -34,6 +34,11 @@ Not affiliated with Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.7
+- New: the status tab shows what the extension is doing right now - the channel being watched, when drops were last checked and what came of it, and when the next check is due.
+- New: drop progress with a remaining time, closest to finished first, each with its campaign. Finished and expired drops are left out.
+- The popup footer shows the installed version.
+
 1.0.6
 - Drops are claimed without a manual page reload. An out-of-date inventory tab is refreshed first.
 - Ad breaks are muted on the browser tab instead of the Twitch player, so no watch time is lost.
@@ -70,6 +75,11 @@ Nicht mit Twitch Interactive, Inc. verbunden.
 **Changelog**
 
 ```
+1.0.7
+- Neu: Der Status-Tab zeigt, was die Erweiterung gerade tut - welcher Kanal überwacht wird, wann zuletzt nach Drops gesucht wurde und was dabei herauskam, und wann die nächste Prüfung ansteht.
+- Neu: Drop-Fortschritt mit Restzeit, das Fertigste zuerst, jeweils mit Kampagne. Fertige und abgelaufene Drops bleiben außen vor.
+- Die installierte Version steht unten im Popup.
+
 1.0.6
 - Drops werden ohne manuelles Neuladen abgeholt. Ein veraltetes Inventar-Tab wird vorher aufgefrischt.
 - Werbepausen werden am Browser-Tab stummgeschaltet statt im Twitch-Player, dadurch geht keine Watchtime verloren.
@@ -106,6 +116,11 @@ Sin afiliación con Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.7
+- Nuevo: la pestaña de estado muestra qué está haciendo la extensión ahora mismo: el canal vigilado, cuándo se comprobaron los drops por última vez y con qué resultado, y cuándo toca la próxima comprobación.
+- Nuevo: progreso de los drops con tiempo restante, primero los más cercanos a completarse, cada uno con su campaña. Los drops completados y caducados quedan fuera.
+- La versión instalada aparece en el pie del popup.
+
 1.0.6
 - Los drops se reclaman sin recargar la página a mano. Antes se actualiza la pestaña de inventario desactualizada.
 - Los anuncios se silencian en la pestaña del navegador y no en el reproductor de Twitch, así no se pierde tiempo de visualización.
@@ -142,6 +157,11 @@ Sans affiliation avec Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.7
+- Nouveau : l'onglet Statut montre ce que fait l'extension en ce moment : la chaîne surveillée, la dernière vérification des drops et son résultat, et l'heure de la prochaine.
+- Nouveau : progression des drops avec le temps restant, les plus avancés en premier, chacun avec sa campagne. Les drops terminés et expirés sont exclus.
+- La version installée est affichée en bas du popup.
+
 1.0.6
 - Les drops sont récupérés sans rechargement manuel. Un onglet d'inventaire obsolète est actualisé au préalable.
 - Les pubs sont coupées au niveau de l'onglet et non dans le lecteur Twitch : plus de temps de visionnage perdu.
@@ -178,6 +198,11 @@ Non affiliato a Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.7
+- Novità: la scheda Stato mostra cosa sta facendo l'estensione in questo momento: il canale sorvegliato, l'ultimo controllo dei drops con il suo esito e quando è previsto il prossimo.
+- Novità: avanzamento dei drops con il tempo rimanente, prima quelli più vicini al completamento, ognuno con la sua campagna. I drops completati e scaduti restano fuori.
+- La versione installata è mostrata in fondo al popup.
+
 1.0.6
 - I drops vengono riscattati senza ricaricare la pagina a mano. Una scheda inventario non aggiornata viene aggiornata prima.
 - La pubblicità viene silenziata sulla scheda del browser invece che nel player Twitch, così non si perde tempo di visione.
@@ -214,6 +239,11 @@ Sem vínculo com a Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.7
+- Novo: a aba Status mostra o que a extensão está fazendo agora: o canal monitorado, quando os drops foram verificados pela última vez e com que resultado, e quando será a próxima verificação.
+- Novo: progresso dos drops com tempo restante, os mais próximos de concluir primeiro, cada um com sua campanha. Drops concluídos e expirados ficam de fora.
+- A versão instalada aparece no rodapé do popup.
+
 1.0.6
 - Os drops são resgatados sem recarregar a página na mão. Uma aba de inventário desatualizada é atualizada antes.
 - Os anúncios são silenciados na aba do navegador em vez do player da Twitch, então nenhum tempo assistido é perdido.
@@ -250,6 +280,11 @@ Niepowiązane z Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.7
+- Nowość: karta Status pokazuje, co rozszerzenie robi w tej chwili - nadzorowany kanał, kiedy ostatnio sprawdzono dropy i z jakim skutkiem oraz kiedy nastąpi kolejne sprawdzenie.
+- Nowość: postęp dropów z czasem pozostałym, najbliższe ukończenia na górze, każdy ze swoją kampanią. Ukończone i wygasłe dropy są pomijane.
+- Zainstalowana wersja jest widoczna na dole okienka.
+
 1.0.6
 - Dropy są odbierane bez ręcznego przeładowania strony. Nieaktualna karta ekwipunku jest wcześniej odświeżana.
 - Reklamy są wyciszane na karcie przeglądarki zamiast w odtwarzaczu Twitcha, więc nie tracisz czasu oglądania.
@@ -286,6 +321,11 @@ AD-Twitcher не блокировщик рекламы: реклама Twitch п
 **Changelog**
 
 ```
+1.0.7
+- Новое: вкладка «Статус» показывает, чем расширение занято прямо сейчас: какой канал отслеживается, когда в последний раз проверялись дропы и с каким результатом, и когда будет следующая проверка.
+- Новое: прогресс дропов с оставшимся временем, ближайшие к завершению сверху, каждый со своей кампанией. Завершённые и истёкшие дропы не показываются.
+- Установленная версия показана внизу всплывающего окна.
+
 1.0.6
 - Дропы забираются без ручной перезагрузки страницы. Устаревшая вкладка инвентаря обновляется заранее.
 - Реклама заглушается на вкладке браузера, а не в плеере Twitch, поэтому время просмотра не теряется.
@@ -322,6 +362,11 @@ Twitch Interactive, Inc. ile bağlantılı değildir.
 **Changelog**
 
 ```
+1.0.7
+- Yeni: Durum sekmesi eklentinin şu anda ne yaptığını gösterir: izlenen kanal, dropsların en son ne zaman kontrol edildiği ve sonucu, bir sonraki kontrolün ne zaman olacağı.
+- Yeni: kalan süreyle birlikte drops ilerlemesi, bitmeye en yakın olan en üstte, her biri kampanyasıyla. Tamamlanmış ve süresi dolmuş dropslar listelenmez.
+- Kurulu sürüm açılır pencerenin altında gösterilir.
+
 1.0.6
 - Dropslar sayfayı elle yenilemeden alınır. Eskimiş envanter sekmesi önce tazelenir.
 - Reklamlar Twitch oynatıcısı yerine tarayıcı sekmesinde sessize alınır, böylece izleme süresi kaybolmaz.
@@ -358,6 +403,11 @@ Twitch Interactive, Inc. とは関係ありません。
 **Changelog**
 
 ```
+1.0.7
+- 新機能: ステータスタブに現在の動作を表示します。監視中のチャンネル、前回の Drops 確認の時刻と結果、次回の確認予定。
+- 新機能: Drops の進捗と残り時間を、完了に近い順にキャンペーン名つきで表示します。完了済みと終了したものは除外されます。
+- インストール済みのバージョンをポップアップ下部に表示します。
+
 1.0.6
 - 手動での再読み込みなしに Drops を受け取れるようになりました。古いインベントリタブは先に更新されます。
 - 広告のミュートを Twitch プレイヤーではなくブラウザーのタブで行うようになり、視聴時間が失われません。
@@ -394,6 +444,11 @@ Twitch Interactive, Inc.와 제휴 관계가 없습니다.
 **Changelog**
 
 ```
+1.0.7
+- 새 기능: 상태 탭에 지금 무엇을 하고 있는지 표시합니다. 감시 중인 채널, 마지막 드롭 확인 시각과 결과, 다음 확인 예정 시각.
+- 새 기능: 드롭 진행도와 남은 시간을 완료에 가까운 순서로, 캠페인과 함께 표시합니다. 완료되었거나 종료된 드롭은 제외됩니다.
+- 설치된 버전을 팝업 하단에 표시합니다.
+
 1.0.6
 - 페이지를 직접 새로 고치지 않아도 드롭을 수령합니다. 오래된 인벤토리 탭은 먼저 갱신됩니다.
 - 광고를 Twitch 플레이어가 아니라 브라우저 탭에서 음소거하므로 시청 시간이 사라지지 않습니다.
@@ -430,6 +485,11 @@ AD-Twitcher 不是广告拦截器：标签页静音期间 Twitch 广告仍在播
 **Changelog**
 
 ```
+1.0.7
+- 新增：状态标签页显示扩展当前在做什么：正在监视的频道、上次检查掉落的时间与结果、下次检查的时间。
+- 新增：掉落进度与剩余时间，越接近完成越靠前，并标注所属活动。已完成和已过期的掉落不再显示。
+- 弹出窗口底部显示已安装的版本号。
+
 1.0.6
 - 无需手动刷新即可领取掉落，过期的库存标签页会先自动刷新。
 - 广告改为在浏览器标签页静音，而不是静音 Twitch 播放器，因此不会损失观看时长。
