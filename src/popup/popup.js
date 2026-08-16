@@ -91,6 +91,19 @@
     document.title = ADT.msg('extName');
   }
 
+  /**
+   * Writes the installed version into the footer. The manifest is the only
+   * source: build.mjs stamps it from package.json, so a badge read at runtime
+   * cannot drift from the package that is actually loaded.
+   */
+  function renderVersion() {
+    var el = $('appVersion');
+    if (!el) return;
+    var manifest = api.runtime.getManifest ? api.runtime.getManifest() : null;
+    var version = manifest && manifest.version;
+    el.textContent = version ? 'v' + version : EMPTY;
+  }
+
   /* --------------------------------------------- path helpers for data-set */
 
   /**
@@ -545,6 +558,7 @@
   }
 
   localizeDom();
+  renderVersion();
   bindTabs();
   bindInputs();
   refreshAll();

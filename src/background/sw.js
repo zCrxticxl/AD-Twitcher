@@ -148,6 +148,140 @@
 
   /* ------------------------------------------ drops: inventory background tab */
 
+  /**
+   * A tab that was just reloaded is left alone this long. Comfortably above the
+   * content script's notification debounce, so a toast that lingers on screen
+   * cannot turn into a second reload.
+   * @const {number}
+   */
+  var INVENTORY_RELOAD_COOLDOWN_MS = 180000;
+
+  /** @const {number} Grid render time after a reload, before the claim nudge. */
+  var INVENTORY_RENDER_MS = 4000;
+
+  /**
+   * Tab id to the last reload we triggered. In memory is enough here: this only
+   * has to absorb a burst of unlock reports, which arrive minutes apart at
+   * worst, and a worker restart costs one extra reload at most.
+   * @type {!Object<number, number>}
+   */
+  var lastInventoryReload = {};
+
+  /**
+   * @param {number} tabId
+   * @param {number=} timeoutMs
+   * @return {!Promise<void>} Resolves when the tab finished loading, or on
+   *     timeout. The content script claims on its own once it comes up, so a
+   *     missed resolution costs nothing.
+   */
+  function waitForTabLoad(tabId, timeoutMs) {
+    return new Promise(function (resolve) {
+      var done = false;
+
+      function finish() {
+        if (done) return;
+        done = true;
+        try {
+          api.tabs.onUpdated.removeListener(onUpdated);
+        } catch (e) {
+          // Listener was never attached.
+        }
+        resolve();
+      }
+
+      function onUpdated(id, changeInfo) {
+        if (id === tabId && changeInfo && changeInfo.status === 'complete') finish();
+      }
+
+      try {
+        api.tabs.onUpdated.addListener(onUpdated);
+      } catch (e) {
+        finish();
+        return;
+      }
+      setTimeout(finish, timeoutMs || 30000);
+    });
+  }
+
+  /**
+   * @param {number} tabId
+   * @return {!Promise<?Object>} The content script's claim report.
+   */
+  function claimInTab(tabId) {
+    return g.ADT.sendToTab(tabId, { type: 'adt:claim-drops-now' });
+  }
+
+  /**
+   * The inventory page is rendered from data Twitch fetched while it loaded and
+   * is never refetched. An open tab therefore shows the drop state of its load
+   * time, so a drop that finished afterwards has no claim button in that DOM.
+   * Scanning harder cannot fix that; only a reload can.
+   *
+   * @param {number} tabId
+   * @return {!Promise<*>}
+   */
+  function refreshInventoryTab(tabId) {
+    var now = Date.now();
+    if (now - (lastInventoryReload[tabId] || 0) < INVENTORY_RELOAD_COOLDOWN_MS) {
+      log.debug('drops: inventory reload suppressed by cooldown');
+      return Promise.resolve(null);
+    }
+    lastInventoryReload[tabId] = now;
+    log.info('drops: inventory view predates the drop, reloading tab ' + tabId);
+
+    return Promise.resolve(api.tabs.reload(tabId))
+      .then(function () { return waitForTabLoad(tabId); })
+      .then(function () { return g.ADT.sleep(INVENTORY_RENDER_MS); })
+      .then(function () { return claimInTab(tabId); })
+      .catch(function (e) {
+        log.warn('drops: inventory reload failed: ' + (e && e.message));
+      });
+  }
+
+  /**
+   * @param {!Object} tab An open /drops/inventory tab.
+   * @param {!Object} s Settings.
+   * @return {!Promise<*>}
+   */
+  function claimInOpenInventory(tab, s) {
+    return claimInTab(tab.id).then(function (res) {
+      var report = res && res.report;
+      if (report && report.pending) {
+        log.info('drops: ' + report.pending + ' claim(s) running in tab ' + tab.id);
+        return null;
+      }
+      if (!s.drops.refreshInventory) {
+        log.debug('drops: nothing to claim, refresh disabled');
+        return null;
+      }
+      // A view younger than the drop has genuinely nothing to claim. Anything
+      // older cannot be trusted to know about it yet.
+      if (report && report.stale === false) {
+        log.debug('drops: inventory is current, nothing to claim');
+        return null;
+      }
+      return refreshInventoryTab(tab.id);
+    });
+  }
+
+  /**
+   * @param {!Object} s Settings.
+   * @return {!Promise<*>}
+   */
+  function openInventoryTab(s) {
+    return Promise.resolve(api.tabs.create({
+      url: 'https://www.twitch.tv/drops/inventory',
+      active: false
+    })).then(function (tab) {
+      if (!tab || tab.id == null) return;
+      Promise.resolve(api.tabs.update(tab.id, { muted: true })).catch(function () {});
+      log.debug('drops: inventory tab opened (' + tab.id + ')');
+      api.alarms.create(ALARM_CLOSE_TAB_PREFIX + tab.id, {
+        when: Date.now() + Math.max(8000, s.drops.closeAfterMs)
+      });
+    });
+  }
+
   /** @return {!Promise<*>} */
   function runDropsCheck() {
     return g.ADT.settings.get().then(function (s) {
@@ -157,25 +291,148 @@
       return Promise.resolve(api.tabs.query({
         url: ['*://*.twitch.tv/drops/inventory', '*://*.twitch.tv/drops/inventory?*']
       })).then(function (tabs) {
-        if (tabs && tabs.length) {
-          // Already open. Trigger a claim and leave the tab alone.
-          log.debug('drops: inventory already open');
-          return g.ADT.sendToTab(tabs[0].id, { type: 'adt:claim-drops-now' });
-        }
-        return Promise.resolve(api.tabs.create({
-          url: 'https://www.twitch.tv/drops/inventory',
-          active: false
-        })).then(function (tab) {
-          if (!tab || tab.id == null) return;
-          Promise.resolve(api.tabs.update(tab.id, { muted: true })).catch(function () {});
-          log.debug('drops: inventory tab opened (' + tab.id + ')');
-          api.alarms.create(ALARM_CLOSE_TAB_PREFIX + tab.id, {
-            when: Date.now() + Math.max(8000, s.drops.closeAfterMs)
-          });
-        });
+        if (tabs && tabs.length) return claimInOpenInventory(tabs[0], s);
+        return openInventoryTab(s);
       });
     }).catch(function (e) {
       log.error('drops-check: ' + (e && e.message));
+    });
+  }
+
+  /* ------------------------------------------------- browser-level tab mute */
+
+  /*
+   * Muting the <video> element is visible to Twitch: the player writes the new
+   * state into its own store and fires volumechange, and any restore that does
+   * not land leaves the stream silent for the rest of the session. Muting the
+   * tab happens outside the page. The player never learns about it, so playback
+   * and the viewer heartbeats that carry watch time and drop progress continue
+   * untouched.
+   */
+
+  /**
+   * Which tabs this extension muted for an ad, and when. In storage, not in a
+   * variable: an ad break outlives the service worker without trouble, and a
+   * record lost to a worker restart would leave that tab silent for good.
+   * @const {string}
+   */
+  var MUTE_RT_KEY = 'adMuteRuntime';
+
+  /** @const {number} No ad break comes close. Anything older is a leak. */
+  var TAB_MUTE_MAX_MS = 10 * 60000;
+
+  /** @return {!Promise<!Object>} */
+  function loadMuteRt() {
+    return Promise.resolve(api.storage.local.get(MUTE_RT_KEY)).then(function (res) {
+      var rt = (res && res[MUTE_RT_KEY]) || {};
+      rt.tabs = rt.tabs || {};      // tabId -> muted at.
+      return rt;
+    });
+  }
+
+  /** @param {!Object} rt @return {!Promise<void>} */
+  function saveMuteRt(rt) {
+    var out = {};
+    out[MUTE_RT_KEY] = rt;
+    return Promise.resolve(api.storage.local.set(out));
+  }
+
+  /**
+   * Second opinion before unmuting: the browser itself says who muted a tab.
+   * Auto-join's muteOnOpen is also an extension mute, which is why the stored
+   * record above decides and this only guards against unmuting the user.
+   *
+   * @param {?Object} tab
+   * @return {boolean}
+   */
+  function mutedByUs(tab) {
+    var info = tab && tab.mutedInfo;
+    if (!info || !info.muted) return false;
+    if (info.reason && info.reason !== 'extension') return false;
+    if (info.extensionId && info.extensionId !== api.runtime.id) return false;
+    return true;
+  }
+
+  /**
+   * @param {number} tabId
+   * @return {!Promise<!Object>}
+   */
+  function releaseTabMute(tabId) {
+    return loadMuteRt().then(function (rt) {
+      var key = String(tabId);
+      if (!rt.tabs[key]) return { ok: true, changed: false };
+      delete rt.tabs[key];
+
+      return saveMuteRt(rt)
+        .then(function () { return api.tabs.get(tabId); })
+        .then(function (tab) {
+          if (!mutedByUs(tab)) return { ok: true, changed: false };
+          return Promise.resolve(api.tabs.update(tabId, { muted: false }))
+            .then(function () { return { ok: true, changed: true }; });
+        });
+    }).catch(function (e) {
+      return { ok: false, error: String(e && e.message) };
+    });
+  }
+
+  /**
+   * @param {number} tabId
+   * @param {boolean} muted
+   * @return {!Promise<!Object>}
+   */
+  function setTabMuted(tabId, muted) {
+    if (!muted) return releaseTabMute(tabId);
+
+    return Promise.resolve(api.tabs.get(tabId)).then(function (tab) {
+      // Already silent, by the user or by auto-join. Leave it alone and claim
+      // nothing, so nothing here can unmute it later.
+      if (tab && tab.mutedInfo && tab.mutedInfo.muted) {
+        return { ok: true, changed: false };
+      }
+      return Promise.resolve(api.tabs.update(tabId, { muted: true }))
+        .then(loadMuteRt)
+        .then(function (rt) {
+          rt.tabs[String(tabId)] = Date.now();
+          return saveMuteRt(rt);
+        })
+        .then(function () { return { ok: true, changed: true }; });
+    }).catch(function (e) {
+      return { ok: false, error: String(e && e.message) };
+    });
+  }
+
+  /**
+   * Last line of defence. A content script that dies mid-break never sends its
+   * unmute, and nobody should have to find that tab by hand.
+   *
+   * @return {!Promise<*>}
+   */
+  function sweepTabMutes() {
+    return loadMuteRt().then(function (rt) {
+      var now = Date.now();
+      var chain = Promise.resolve();
+
+      Object.keys(rt.tabs).forEach(function (key) {
+        if (now - Number(rt.tabs[key] || 0) <= TAB_MUTE_MAX_MS) return;
+        chain = chain.then(function () {
+          log.warn('Ad mute on tab ' + key + ' outlived any ad break, releasing');
+          return releaseTabMute(Number(key));
+        });
+      });
+      return chain;
+    }).catch(function (e) {
+      log.warn('mute sweep: ' + (e && e.message));
+    });
+  }
+
+  /** @param {number} tabId @return {!Promise<*>} */
+  function forgetTabMute(tabId) {
+    return loadMuteRt().then(function (rt) {
+      if (!rt.tabs[String(tabId)]) return null;
+      delete rt.tabs[String(tabId)];
+      return saveMuteRt(rt);
+    }).catch(function () {
+      return null;
     });
   }
 
@@ -208,7 +465,10 @@
 
   api.alarms.onAlarm.addListener(function (alarm) {
     if (alarm.name === ALARM_DROPS) runDropsCheck();
-    if (alarm.name === ALARM_HEALTH) g.ADT.watchHealth.check();
+    if (alarm.name === ALARM_HEALTH) {
+      g.ADT.watchHealth.check();
+      sweepTabMutes();
+    }
     if (alarm.name.indexOf(ALARM_CLOSE_TAB_PREFIX) === 0) {
       var tabId = Number(alarm.name.slice(ALARM_CLOSE_TAB_PREFIX.length));
       if (Number.isInteger(tabId)) {
@@ -242,6 +502,17 @@
           g.ADT.watchHealth.forgetTab(sender.tab.id);
         }
         sendResponse({ ok: true });
+        return true;
+
+      // Ad mute at browser level. The sender decides when, this side only ever
+      // touches the tab it came from.
+      case 'adt:tab-mute':
+        var muteTabId = sender && sender.tab && sender.tab.id;
+        if (muteTabId == null) {
+          sendResponse({ ok: false, error: 'no tab' });
+          return true;
+        }
+        setTabMuted(muteTabId, !!msg.muted).then(sendResponse);
         return true;
 
       case 'adt:set-settings':
@@ -309,6 +580,18 @@
   api.tabs.onRemoved.addListener(function (tabId) {
     g.ADT.liveWatch.forgetTab(tabId);
     g.ADT.watchHealth.forgetTab(tabId);
+    forgetTabMute(tabId);
+    delete lastInventoryReload[tabId];
+  });
+
+  /*
+   * A navigating tab has no ad left to mute, and the content script that asked
+   * for the mute is gone with the old document. Without this the tab would stay
+   * silent until the sweep notices, or until the user unmutes it by hand.
+   */
+  api.tabs.onUpdated.addListener(function (tabId, changeInfo) {
+    if (!changeInfo || changeInfo.status !== 'loading') return;
+    releaseTabMute(tabId);
   });
 
   api.runtime.onInstalled.addListener(function (details) {

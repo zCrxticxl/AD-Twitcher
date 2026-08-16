@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Wesprzyj autora przez Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Obserwuj @zCrxticxl na X / Twitterze" },
+  "versionTitle": { "message": "Zainstalowana wersja" },
 
   "masterToggleTitle": { "message": "Włącz lub wyłącz wszystko" },
   "tabStatus": { "message": "Stan" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Strażnik transmisji" },
   "optWatchHealthEnabled": { "message": "Monitoruj odtwarzanie kanału" },
   "optWatchHealthKeepAwake": { "message": "Zachowaj monitorowane karty w pamięci" },
+  "optWatchHealthKeepPlaying": { "message": "Wznów odtwarzanie, gdy odtwarzacz się zatrzyma" },
   "optWatchHealthNotifications": { "message": "Powiadom o zatrzymaniu odtwarzania" },
   "optWatchHealthRecover": { "message": "Automatycznie odświeżaj zablokowane karty" },
   "optWatchHealthStaleMinutes": { "message": "Ostrzeż po (min)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Odbieraj ukończone dropy (tylko na /drops/inventory)" },
   "optDropsWatchNotifications": { "message": "Reaguj na powiadomienie „drop odblokowany”" },
   "optDropsOpenInventory": { "message": "Otwórz wtedy ekwipunek w karcie w tle" },
+  "optDropsRefresh": { "message": "Przeładuj stronę ekwipunku, gdy jej widok jest nieaktualny" },
   "optDropsInterval": { "message": "Sprawdzenie awaryjne (min)" },
   "hintDrops": { "message": "Kliknięcia następują wyłącznie na stronie ekwipunku. Wszędzie indziej powiadomienie jest tylko odczytywane, nigdy klikane, więc na stronach kanałów nie ma żadnej ścieżki kliknięcia. Odstęp to jedynie zabezpieczenie na wypadek przeoczonego powiadomienia." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Reklamy" },
   "optAdMuteEnabled": { "message": "Wyciszaj podczas reklam" },
+  "optAdMuteTarget": { "message": "Wyciszaj przez" },
+  "optAdMuteTargetTab": { "message": "Kartę przeglądarki (zalecane)" },
+  "optAdMuteTargetPlayer": { "message": "Odtwarzacz Twitcha" },
+  "optAdMuteTargetNone": { "message": "Nie wyciszaj" },
   "optAdMuteOverlay": { "message": "Przykryj odtwarzacz nakładką" },
   "hintAdMute": { "message": "To nie jest blokada reklam. Twitch wplata reklamy w ten sam strumień (SSAI), więc nie ma żadnego żądania do zablokowania. Reklamy lecą dalej, po prostu ich nie widzisz i nie słyszysz." },
 

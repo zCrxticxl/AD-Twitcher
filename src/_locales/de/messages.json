@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Entwickler über Buy Me a Coffee unterstützen" },
   "twitterLinkLabel": { "message": "@zCrxticxl auf X / Twitter folgen" },
+  "versionTitle": { "message": "Installierte Version" },
 
   "masterToggleTitle": { "message": "Alles an- oder ausschalten" },
   "tabStatus": { "message": "Status" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Stream-Wächter" },
   "optWatchHealthEnabled": { "message": "Kanalwiedergabe überwachen" },
   "optWatchHealthKeepAwake": { "message": "Überwachte Tabs im Speicher halten" },
+  "optWatchHealthKeepPlaying": { "message": "Wiedergabe fortsetzen, wenn der Player pausiert" },
   "optWatchHealthNotifications": { "message": "Bei gestoppter Wiedergabe benachrichtigen" },
   "optWatchHealthRecover": { "message": "Festgefahrene Tabs automatisch neu laden" },
   "optWatchHealthStaleMinutes": { "message": "Warnen nach (Min.)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Fertige Drops einlösen (nur auf /drops/inventory)" },
   "optDropsWatchNotifications": { "message": "Auf die Meldung „Drop freigeschaltet“ reagieren" },
   "optDropsOpenInventory": { "message": "Inventar dann im Hintergrundtab öffnen" },
+  "optDropsRefresh": { "message": "Inventarseite neu laden, wenn ihre Ansicht veraltet ist" },
   "optDropsInterval": { "message": "Rückfallprüfung (Min)" },
   "hintDrops": { "message": "Geklickt wird ausschließlich auf der Inventarseite. Überall sonst wird die Benachrichtigung nur gelesen, nie geklickt, es gibt also auf Kanalseiten keinen Klick-Pfad. Das Intervall ist nur ein Sicherheitsnetz für verpasste Meldungen." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Werbung" },
   "optAdMuteEnabled": { "message": "Bei Werbung stumm schalten" },
+  "optAdMuteTarget": { "message": "Stummschalten über" },
+  "optAdMuteTargetTab": { "message": "Browser-Tab (empfohlen)" },
+  "optAdMuteTargetPlayer": { "message": "Twitch-Player" },
+  "optAdMuteTargetNone": { "message": "Nicht stummschalten" },
   "optAdMuteOverlay": { "message": "Player mit Overlay abdecken" },
   "hintAdMute": { "message": "Kein Adblocker. Twitch mischt Werbung in denselben Stream (SSAI), es gibt also keinen blockierbaren Request. Die Werbung läuft weiter, du siehst und hörst sie nur nicht." },
 

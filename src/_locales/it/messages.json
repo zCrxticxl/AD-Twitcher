@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Sostieni lo sviluppatore su Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Segui @zCrxticxl su X / Twitter" },
+  "versionTitle": { "message": "Versione installata" },
 
   "masterToggleTitle": { "message": "Attiva o disattiva tutto" },
   "tabStatus": { "message": "Stato" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Controllo dello stream" },
   "optWatchHealthEnabled": { "message": "Controlla la riproduzione del canale" },
   "optWatchHealthKeepAwake": { "message": "Mantieni in memoria le schede controllate" },
+  "optWatchHealthKeepPlaying": { "message": "Riprendi la riproduzione quando il player va in pausa" },
   "optWatchHealthNotifications": { "message": "Avvisa quando la riproduzione si ferma" },
   "optWatchHealthRecover": { "message": "Ricarica automaticamente le schede bloccate" },
   "optWatchHealthStaleMinutes": { "message": "Avvisa dopo (min)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Riscuoti i drop completati (solo su /drops/inventory)" },
   "optDropsWatchNotifications": { "message": "Reagisci alla notifica «drop sbloccato»" },
   "optDropsOpenInventory": { "message": "Apri poi l’inventario in una scheda in secondo piano" },
+  "optDropsRefresh": { "message": "Ricarica la pagina inventario quando la vista non è aggiornata" },
   "optDropsInterval": { "message": "Controllo di riserva (min)" },
   "hintDrops": { "message": "I clic avvengono soltanto nella pagina dell’inventario. Altrove la notifica viene solo letta, mai cliccata, quindi sulle pagine dei canali non esiste alcun percorso di clic. L’intervallo è solo una rete di sicurezza per le notifiche perse." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Pubblicità" },
   "optAdMuteEnabled": { "message": "Silenzia durante la pubblicità" },
+  "optAdMuteTarget": { "message": "Silenzia tramite" },
+  "optAdMuteTargetTab": { "message": "Scheda del browser (consigliato)" },
+  "optAdMuteTargetPlayer": { "message": "Player di Twitch" },
+  "optAdMuteTargetNone": { "message": "Non silenziare" },
   "optAdMuteOverlay": { "message": "Copri il player con un overlay" },
   "hintAdMute": { "message": "Non è un ad blocker. Twitch inserisce la pubblicità nello stesso flusso (SSAI), quindi non c’è alcuna richiesta da bloccare. Gli spot continuano, semplicemente non li vedi né li senti." },
 

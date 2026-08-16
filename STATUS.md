@@ -43,6 +43,23 @@ live Twitch behavior still requires manual browser sessions.
 12. The stream watchdog measures actual video-time progress, marks monitored
     tabs as non-discardable, reports stale or suspended tabs through localized
     browser notifications and performs at most one recovery reload per incident.
+13. Drops no longer wait for a manual F5. Twitch renders the inventory once from
+    data fetched at load time, so an open tab cannot show a drop that finished
+    afterwards. When an unlock is reported and the open inventory has nothing to
+    claim, the background reloads that tab once (three-minute cooldown) and
+    claims when it is back; a hidden inventory tab also refreshes itself past a
+    15-minute view age. The claim scan reports what it found and how old its
+    view is, so a current inventory is never reloaded for nothing.
+14. Ads are muted on the browser tab instead of the `<video>` element, so the
+    player never sees a mute and watch time keeps accruing. A tab already muted
+    by hand is left untouched and never unmuted. Mute ownership lives in
+    `storage.local` and expires after ten minutes, because an ad break outlives
+    the MV3 worker and a lost record would leave the tab silent for good. The
+    watchdog additionally takes back any pause the user did not ask for, capped
+    at six resumes per minute.
+15. The popup footer shows the installed version in its bottom right corner. It
+    is read from the manifest at runtime, which `build.mjs` stamps from
+    `package.json`, so the badge cannot drift from the loaded package.
 
 ## 0.2.0
 
@@ -147,15 +164,24 @@ Full internationalization and a source-level pass over the whole tree.
 
 2. **Verify ad-mute recovery in a real Firefox.** Automated lifecycle and
    source-level checks pass. A real Twitch ad break is still required to verify
-   the final behavior against Twitch's current player implementation.
+   the final behavior against Twitch's current player implementation. Two things
+   to watch specifically: that the tab audio comes back after the break, and
+   that `mutedInfo.reason` reports `extension` in Firefox the way it does in
+   Chrome, since the release path checks it before unmuting.
 
-3. **Chrome has never been tested.** Above all `scripting.executeScript`
+3. **Verify the inventory reload against a real finished drop.** The reload
+   path is driven end to end in the harness against stub tabs. What no test can
+   answer is how long Twitch needs after a reload before the claim button is in
+   the DOM; `INVENTORY_RENDER_MS` in `background/sw.js` is currently 4 s, and
+   the content script keeps scanning afterwards regardless.
+
+4. **Chrome has never been tested.** Above all `scripting.executeScript`
    injection and the MV3 service worker lifecycle.
 
-4. **Auto-join is untested.** It depends on the followed sidebar and needs an
+5. **Auto-join is untested.** It depends on the followed sidebar and needs an
    open, logged-in Twitch tab.
 
-5. **Locales are unverified at runtime.** The catalogs are statically complete
+6. **Locales are unverified at runtime.** The catalogs are statically complete
    and consistent, but no locale has been rendered in a browser. Worth checking
    specifically: popup width at 360 px with the longer German, Russian and
    Turkish strings, and whether Twitch's actual claim captions in ja, ko and

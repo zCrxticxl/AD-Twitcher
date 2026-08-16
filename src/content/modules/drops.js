@@ -160,14 +160,36 @@
   /** @const {number} Minimum gap between two notification reports. */
   var NOTIFY_DEBOUNCE_MS = 120000;
 
+  /* ------------------------------------------------- inventory freshness */
+
+  /*
+   * Twitch renders the inventory once, from data it fetched while the page was
+   * loading, and never refetches it on its own. A tab that has been sitting
+   * open therefore keeps showing the state from back then: a drop that finished
+   * in the meantime has no claim button anywhere in this DOM, and no amount of
+   * scanning produces one. That is the whole reason claiming used to require a
+   * manual F5. Only a reload brings the button into existence.
+   */
+
+  /** @const {number} Below this age the view is trusted to be current. */
+  var STALE_VIEW_MS = 45000;
+
+  /** @const {number} A hidden inventory tab is refreshed once it gets this old. */
+  var VIEW_MAX_AGE_MS = 15 * 60000;
+
+  /** @const {number} How often the age above is evaluated. */
+  var FRESHNESS_TICK_MS = 60000;
+
   var state = {
     running: false,
     mode: null,
     timer: null,
+    freshTimer: null,
     observer: null,
     cfg: null,
     clicked: null,
     lastNotify: 0,
+    viewLoadedAt: 0,
     pendingTimers: []
   };
 
@@ -198,11 +220,28 @@
     });
   }
 
+  /** @return {boolean} True when a reload could still reveal new claim buttons. */
+  function viewIsStale() {
+    return state.mode === 'claim' &&
+      Date.now() - state.viewLoadedAt > STALE_VIEW_MS;
+  }
+
+  /**
+   * @return {{mode: string, pending: number, stale: boolean}} What the caller
+   *     needs to decide whether this page is worth reloading: how many claims
+   *     are running, and whether the view is old enough to be hiding one.
+   */
   function claimAll() {
-    if (!state.running || state.mode !== 'claim' || !state.cfg.autoClaim) return;
+    var report = {
+      mode: state.mode || 'off',
+      pending: 0,
+      stale: viewIsStale()
+    };
+    if (!state.running || state.mode !== 'claim' || !state.cfg.autoClaim) return report;
 
     var targets = collectClaimButtons();
-    if (!targets.length) return;
+    if (!targets.length) return report;
+    report.pending = targets.length;
 
     // Sequential with spacing: Twitch rebuilds the grid after every claim.
     targets.forEach(function (btn, i) {
@@ -218,6 +257,24 @@
       }, g.ADT.jitter(700 + i * 1400, 800));
       state.pendingTimers.push(timer);
     });
+    return report;
+  }
+
+  /**
+   * Keeps a parked inventory tab current. Reloading is only acceptable while
+   * nobody is looking at the page and no claim is in flight, so this waits for
+   * a hidden tab and skips the moment a click is pending.
+   */
+  function refreshStaleView() {
+    if (!state.running || state.mode !== 'claim') return;
+    if (!state.cfg.refreshInventory || !state.cfg.autoClaim) return;
+    if (state.pendingTimers.length) return;
+    if (document.visibilityState !== 'hidden') return;
+    if (Date.now() - state.viewLoadedAt < VIEW_MAX_AGE_MS) return;
+    if (collectClaimButtons().length) return;   // Claim first, reload later.
+
+    log.info('Inventory view is stale, reloading in the background');
+    location.reload();
   }
 
   /** Read-only. No click, no DOM mutation. */
@@ -245,10 +302,12 @@
     state.running = true;
     state.clicked = new WeakSet();
     state.mode = onInventoryPage() ? 'claim' : 'watch';
+    state.viewLoadedAt = Date.now();
 
     if (state.mode === 'claim') {
       state.observer = D.observe(document.body, claimAll, 700);
       state.timer = setInterval(claimAll, 8000);
+      state.freshTimer = setInterval(refreshStaleView, FRESHNESS_TICK_MS);
       D.waitFor(INVENTORY_ROOTS, 20000).then(function () {
         if (state.running) setTimeout(claimAll, 1500);
       });
@@ -271,6 +330,10 @@
     if (state.timer) {
       clearInterval(state.timer);
       state.timer = null;
+    }
+    if (state.freshTimer) {
+      clearInterval(state.freshTimer);
+      state.freshTimer = null;
     }
     if (state.observer) {
       state.observer.disconnect();

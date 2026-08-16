@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Buy Me a Coffee에서 개발자 후원" },
   "twitterLinkLabel": { "message": "X / Twitter에서 @zCrxticxl 팔로우" },
+  "versionTitle": { "message": "설치된 버전" },
 
   "masterToggleTitle": { "message": "전체 켜기 또는 끄기" },
   "tabStatus": { "message": "상태" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "방송 감시기" },
   "optWatchHealthEnabled": { "message": "채널 재생 모니터링" },
   "optWatchHealthKeepAwake": { "message": "감시 중인 탭을 메모리에 유지" },
+  "optWatchHealthKeepPlaying": { "message": "플레이어가 일시정지되면 재생 재개" },
   "optWatchHealthNotifications": { "message": "재생이 멈추면 알림" },
   "optWatchHealthRecover": { "message": "멈춘 탭을 자동으로 새로고침" },
   "optWatchHealthStaleMinutes": { "message": "경고 대기 시간(분)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "완료된 드롭 받기 (/drops/inventory 에서만)" },
   "optDropsWatchNotifications": { "message": "‘드롭 획득’ 알림에 반응" },
   "optDropsOpenInventory": { "message": "그때 보관함을 백그라운드 탭으로 열기" },
+  "optDropsRefresh": { "message": "인벤토리 페이지의 내용이 오래되면 새로고침" },
   "optDropsInterval": { "message": "예비 확인 (분)" },
   "hintDrops": { "message": "클릭은 보관함 페이지에서만 일어납니다. 다른 곳에서는 알림을 읽기만 할 뿐 절대 클릭하지 않으므로 채널 페이지에는 클릭 경로가 없습니다. 이 주기는 알림을 놓쳤을 때를 위한 안전장치일 뿐입니다." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "광고" },
   "optAdMuteEnabled": { "message": "광고 중 음소거" },
+  "optAdMuteTarget": { "message": "음소거 방식" },
+  "optAdMuteTargetTab": { "message": "브라우저 탭 (권장)" },
+  "optAdMuteTargetPlayer": { "message": "Twitch 플레이어" },
+  "optAdMuteTargetNone": { "message": "음소거하지 않음" },
   "optAdMuteOverlay": { "message": "플레이어를 오버레이로 가리기" },
   "hintAdMute": { "message": "광고 차단기가 아닙니다. 트위치는 광고를 같은 스트림에 삽입하므로 (SSAI) 차단할 요청 자체가 없습니다. 광고는 계속 재생되며, 보이지 않고 들리지 않을 뿐입니다." },
 

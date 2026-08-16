@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Buy Me a Coffeeで開発者を支援" },
   "twitterLinkLabel": { "message": "X / Twitterで@zCrxticxlをフォロー" },
+  "versionTitle": { "message": "インストール済みのバージョン" },
 
   "masterToggleTitle": { "message": "すべてをオン / オフ" },
   "tabStatus": { "message": "状態" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "配信ウォッチドッグ" },
   "optWatchHealthEnabled": { "message": "チャンネルの再生を監視する" },
   "optWatchHealthKeepAwake": { "message": "監視中のタブをメモリに保持する" },
+  "optWatchHealthKeepPlaying": { "message": "プレイヤーが一時停止したら再生を再開する" },
   "optWatchHealthNotifications": { "message": "再生が止まったら通知する" },
   "optWatchHealthRecover": { "message": "停止したタブを自動で再読み込みする" },
   "optWatchHealthStaleMinutes": { "message": "警告までの時間（分）" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "完了したドロップを受け取る (/drops/inventory のみ)" },
   "optDropsWatchNotifications": { "message": "「ドロップ獲得」の通知に反応する" },
   "optDropsOpenInventory": { "message": "その際にインベントリをバックグラウンドタブで開く" },
+  "optDropsRefresh": { "message": "インベントリページの表示が古い場合は再読み込みする" },
   "optDropsInterval": { "message": "予備チェック (分)" },
   "hintDrops": { "message": "クリックはインベントリページでのみ行われます。それ以外の場所では通知を読み取るだけでクリックはしないため、チャンネルページにクリック経路は存在しません。この間隔は通知を取り逃した場合の保険にすぎません。" },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "広告" },
   "optAdMuteEnabled": { "message": "広告中はミュートする" },
+  "optAdMuteTarget": { "message": "ミュートの方法" },
+  "optAdMuteTargetTab": { "message": "ブラウザーのタブ（推奨）" },
+  "optAdMuteTargetPlayer": { "message": "Twitch のプレイヤー" },
+  "optAdMuteTargetNone": { "message": "ミュートしない" },
   "optAdMuteOverlay": { "message": "プレイヤーをオーバーレイで覆う" },
   "hintAdMute": { "message": "広告ブロッカーではありません。Twitch は広告を同じストリームに埋め込むため (SSAI)、ブロックできるリクエストが存在しません。広告は流れ続けますが、見えず聞こえなくなります。" },
 

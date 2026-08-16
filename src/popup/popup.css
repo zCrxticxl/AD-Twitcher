@@ -164,7 +164,11 @@ textarea { width: 100%; margin-top: 7px; padding: 9px; resize: vertical; font-si
 
 .log { max-height: 350px; margin: 12px 0 0; padding: 11px; overflow: auto; border: 1px solid var(--line); border-radius: 9px; background: #07080a; color: var(--fg2); font: 9.5px/1.5 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
 
-.creator-links { display: flex; align-items: center; justify-content: center; gap: 7px; margin: 0 16px 13px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+/* Empty first column, links in the middle, version right: the links stay
+   centered, and a long version string squeezes the row instead of overlapping. */
+.creator-links { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 7px; margin: 0 16px 13px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
+.creator-links__row { grid-column: 2; display: flex; align-items: center; justify-content: center; gap: 7px; }
+.creator-version { grid-column: 3; justify-self: end; color: var(--fg3); font-size: 9px; line-height: 1.2; letter-spacing: .02em; font-variant-numeric: tabular-nums; }
 .creator-link { display: inline-flex; align-items: center; gap: 4px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; color: var(--fg3); font-size: 9px; line-height: 1.2; text-decoration: none; transition: color .14s ease, border-color .14s ease, background .14s ease; }
 .creator-link:hover { color: var(--fg); border-color: #4a515e; background: var(--surface); }
 .creator-link--coffee:hover { color: #ffd48a; border-color: #8f6b2f; }

@@ -35,6 +35,7 @@
       watchNotifications: true,   // Read-only detection of the unlock toast.
       checkIntervalMin: 120,      // Safety net for a missed notification.
       openInventoryTab: true,     // Open the inventory in a background tab.
+      refreshInventory: true,     // Reload an inventory view older than the drop.
       closeAfterMs: 25000
     },
 
@@ -50,6 +51,7 @@
     watchHealth: {
       enabled: true,
       keepAwake: true,
+      keepPlaying: true,          // Undo a pause the user did not ask for.
       notifications: true,
       recoverTab: true,
       heartbeatSec: 30,
@@ -58,8 +60,9 @@
 
     adMute: {
       enabled: true,
+      muteTarget: 'tab',          // 'tab' (browser level), 'player' or 'none'.
       overlay: true,
-      restoreVolume: true,
+      restoreVolume: true,        // Player target only; the tab has no volume.
       graceMs: 1500               // Ad markers must stay gone this long to unmute.
     },
 

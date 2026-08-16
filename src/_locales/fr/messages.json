@@ -4,6 +4,7 @@
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Soutenir le développeur sur Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Suivre @zCrxticxl sur X / Twitter" },
+  "versionTitle": { "message": "Version installée" },
 
   "masterToggleTitle": { "message": "Tout activer ou désactiver" },
   "tabStatus": { "message": "État" },
@@ -60,6 +61,7 @@
   "cardWatchHealth": { "message": "Surveillance du stream" },
   "optWatchHealthEnabled": { "message": "Surveiller la lecture de la chaîne" },
   "optWatchHealthKeepAwake": { "message": "Garder les onglets surveillés en mémoire" },
+  "optWatchHealthKeepPlaying": { "message": "Reprendre la lecture quand le lecteur se met en pause" },
   "optWatchHealthNotifications": { "message": "Notifier quand la lecture s'arrête" },
   "optWatchHealthRecover": { "message": "Recharger automatiquement les onglets bloqués" },
   "optWatchHealthStaleMinutes": { "message": "Avertir après (min)" },
@@ -78,6 +80,7 @@
   "optDropsAutoClaim": { "message": "Récupérer les drops terminés (uniquement sur /drops/inventory)" },
   "optDropsWatchNotifications": { "message": "Réagir à la notification « drop débloqué »" },
   "optDropsOpenInventory": { "message": "Ouvrir alors l’inventaire dans un onglet en arrière-plan" },
+  "optDropsRefresh": { "message": "Recharger la page d’inventaire quand son affichage est obsolète" },
   "optDropsInterval": { "message": "Vérification de secours (min)" },
   "hintDrops": { "message": "Les clics n’ont lieu que sur la page d’inventaire. Partout ailleurs la notification est seulement lue, jamais cliquée : il n’existe aucun chemin de clic sur les pages de chaîne. L’intervalle sert uniquement de filet de sécurité si une notification a été manquée." },
 
@@ -91,6 +94,10 @@
 
   "cardAds": { "message": "Publicités" },
   "optAdMuteEnabled": { "message": "Couper le son pendant les publicités" },
+  "optAdMuteTarget": { "message": "Couper le son via" },
+  "optAdMuteTargetTab": { "message": "L’onglet du navigateur (recommandé)" },
+  "optAdMuteTargetPlayer": { "message": "Le lecteur Twitch" },
+  "optAdMuteTargetNone": { "message": "Ne pas couper le son" },
   "optAdMuteOverlay": { "message": "Recouvrir le lecteur d’un calque" },
   "hintAdMute": { "message": "Ce n’est pas un bloqueur de publicités. Twitch insère les pubs dans le même flux (SSAI) : aucune requête n’est bloquable. Les publicités continuent, vous ne les voyez ni ne les entendez, c’est tout." },
 
