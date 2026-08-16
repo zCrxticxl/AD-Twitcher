@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "自动领取频道积分和掉宝，静音广告，并在关注的频道开播时自动打开。" },
+  "extName": { "message": "AD-Twitcher：Twitch Drops 与频道积分" },
+  "extDescription": { "message": "自动领取 Twitch Drops 和频道积分，静音广告，并在关注的频道开播时自动打开。" },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "通过 Buy Me a Coffee 支持开发者" },
   "twitterLinkLabel": { "message": "在 X / Twitter 上关注 @zCrxticxl" },

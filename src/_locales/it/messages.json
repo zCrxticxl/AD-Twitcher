@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "Riscuote punti canale e drop, silenzia la pubblicità e apre i canali seguiti appena vanno in diretta." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops e punti" },
+  "extDescription": { "message": "Riscatta automaticamente i Twitch drops e i punti canale, silenzia la pubblicità e apre i canali appena vanno in diretta." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Sostieni lo sviluppatore su Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Segui @zCrxticxl su X / Twitter" },

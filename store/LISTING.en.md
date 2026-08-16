@@ -1,12 +1,16 @@
-# AD-Twitcher
+# AD-Twitcher: Twitch Drops & Points Claimer
+
+Name and short description come from `src/_locales/en/messages.json`
+(`extName`, `extDescription`) and cannot be edited in the store dashboard.
 
 ## Short description
 
-Claim Twitch bonuses and drops, mute ad breaks, follow live channels and view local activity metrics.
+Auto-claim Twitch drops and channel points, mute ad breaks, and open followed channels the moment they go live.
 
 ## Detailed description
 
-AD-Twitcher keeps repetitive Twitch tasks in one focused browser extension.
+AD-Twitcher claims Twitch drops and channel points for you and keeps the
+repetitive Twitch tasks in one focused browser extension.
 
 Features:
 

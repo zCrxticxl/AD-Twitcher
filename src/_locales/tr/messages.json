@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "Kanal puanlarını ve dropları toplar, reklamları sessize alır, takip edilen kanalları yayına girer girmez açar." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops ve puanlar" },
+  "extDescription": { "message": "Twitch drops ve kanal puanlarını otomatik toplar, reklamları sessize alır ve takip edilen kanalları yayına girince açar." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Geliştiriciyi Buy Me a Coffee üzerinden destekle" },
   "twitterLinkLabel": { "message": "X / Twitter’da @zCrxticxl hesabını takip et" },

@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "Récupère les points de chaîne et les drops, coupe le son des publicités et ouvre les chaînes suivies dès qu’elles passent en direct." },
+  "extName": { "message": "AD-Twitcher : Twitch Drops et points" },
+  "extDescription": { "message": "Récupère automatiquement les Twitch drops et les points de chaîne, coupe le son des pubs et ouvre les chaînes en direct." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Soutenir le développeur sur Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Suivre @zCrxticxl sur X / Twitter" },

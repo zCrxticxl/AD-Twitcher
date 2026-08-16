@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher", "description": "Extension name. Product name, do not translate." },
-  "extDescription": { "message": "Claims channel points and drops, mutes ads, opens followed channels when they go live." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops & Points Claimer" },
+  "extDescription": { "message": "Auto-claim Twitch drops and channel points, mute ad breaks, and open followed channels the moment they go live." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Support the developer on Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Follow @zCrxticxl on X / Twitter" },

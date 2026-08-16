@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "チャンネルポイントとドロップを自動で受け取り、広告をミュートし、フォロー中のチャンネルが配信を開始したら開きます。" },
+  "extName": { "message": "AD-Twitcher: Twitch Drops とポイント" },
+  "extDescription": { "message": "Twitch Drops とチャンネルポイントを自動で受け取り、広告をミュートし、フォロー中のチャンネルを配信開始時に開きます。" },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Buy Me a Coffeeで開発者を支援" },
   "twitterLinkLabel": { "message": "X / Twitterで@zCrxticxlをフォロー" },

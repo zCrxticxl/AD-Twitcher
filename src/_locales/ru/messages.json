@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "Забирает баллы канала и дропы, отключает звук рекламы и открывает отслеживаемые каналы, как только они выходят в эфир." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops и баллы" },
+  "extDescription": { "message": "Автоматически забирает Twitch Drops и баллы канала, отключает звук рекламы и открывает каналы при выходе в эфир." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Поддержать разработчика на Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Подписаться на @zCrxticxl в X / Twitter" },
