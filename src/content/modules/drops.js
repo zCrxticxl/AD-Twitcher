@@ -418,23 +418,11 @@
     if (!live.length) live = out;
 
     /*
-     * A drop at 100 % has nothing left to wait for - it is either claimed or
-     * waiting for the claimer, and neither answers "how much longer". The same
-     * drop can also appear twice, because two campaigns can run under one name
-     * with the same reward tiers; keep the one that is further along.
+     * Finished drops stay in. The popup shows them as small markers next to the
+     * running ones rather than as rows, so filtering them out here would only
+     * take away information the display can present cheaply.
      */
-    var best = [];
-    live.forEach(function (item) {
-      if (item.percent >= 100) return;
-      for (var i = 0; i < best.length; i++) {
-        if (best[i].name !== item.name || best[i].campaign !== item.campaign) continue;
-        if (item.percent > best[i].percent) best[i] = item;
-        return;
-      }
-      best.push(item);
-    });
-
-    return best.map(function (item) {
+    return live.map(function (item) {
       return {
         name: item.name,
         campaign: item.campaign,

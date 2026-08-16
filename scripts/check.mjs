@@ -672,7 +672,7 @@ console.log('\n[20] Drop progress');
    * before ranking keeps four drops that just started and throws away the one
    * that is nearly finished further down the page.
    */
-  /\.sort\(function \(a, b\) \{\s*\n\s*return remainingMs\(a\) - remainingMs\(b\);/.test(sw) &&
+  /progressRank\(a\) - progressRank\(b\) \|\| remainingMs\(a\) - remainingMs\(b\)/.test(sw) &&
       sw.indexOf('.sort(') < sw.indexOf('slice(0, MAX_PROGRESS_ITEMS)')
     ? ok('progress is ranked before it is capped')
     : fail('background/sw.js caps the progress list before ranking it');
@@ -685,11 +685,19 @@ console.log('\n[20] Drop progress');
     ? ok('finished campaigns are dropped, but never the whole list')
     : fail('drops.js either keeps expired drops or can filter everything away');
 
-  // A drop at 100 % is claimed or waiting for the claimer. Either way it has no
-  // remaining time, and it would occupy a row that a pending drop needs.
-  /item\.percent >= 100/.test(drops)
-    ? ok('drops that are already finished are not listed as pending')
-    : fail('drops.js ranks finished drops against pending ones');
+  /*
+   * A finished drop has no remaining time, so it must not take a row from a
+   * running one - but it is still worth showing. The popup splits the two and
+   * renders the finished ones as markers.
+   */
+  /item\.percent < 100/.test(js) && /function doneRow/.test(js)
+    ? ok('finished drops are marked, not ranked against running ones')
+    : fail('popup.js mixes finished drops into the running list');
+
+  /function progressRow/.test(js) && /dp-fill/.test(js) &&
+      /fill\.style\.width/.test(js)
+    ? ok('each running drop gets a bar sized to its progress')
+    : fail('popup.js shows progress as text only');
 
   /createElement\('div'\)/.test(js) && !/dpList[^\n]*innerHTML/.test(js)
     ? ok('progress rows are built as nodes, not as markup')
