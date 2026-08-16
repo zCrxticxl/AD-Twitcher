@@ -442,6 +442,18 @@ function evalFragment(source, pattern, tail, context = {}) {
       card('EWC 2026 (Bronze)', 18, 'von 1 Stunde', false),
       card('EWC 2026 (Diamond)', 1, 'von 12 Stunden', false),
       card('Rare 2', 93, 'von 4 Stunden', false)
+    ]),
+    // The "Abgeholt" section: rewards already collected. Full bar, but a date
+    // where a progress caption would be, so there is nothing to report.
+    campaign('Abgeholt', [
+      el('DIV', {}, [
+        el('DIV', {}, [el('DIV', {}, [el('P', {}, ['1000000 RUB'])])]),
+        el('DIV', {}, [
+          el('DIV', {attrs: {role: 'progressbar', 'aria-valuenow': '100',
+            'aria-valuemin': '0', 'aria-valuemax': '100'}}),
+          el('DIV', {}, [el('P', {}, ['vor 2 Stunden'])])
+        ])
+      ])
     ])
   ]);
 
@@ -481,6 +493,8 @@ function evalFragment(source, pattern, tail, context = {}) {
     ['KORD BREACH S1 Drops', 'EWC 2026']);
   eq('the same tier in two campaigns stays two drops',
     got.filter((g) => g.name === 'Rare 2').length, 2);
+  eq('a collected reward has a bar but no caption, and is not progress',
+    got.some((g) => g.name === '1000000 RUB'), false);
 }
 
 /* ------------------------------------------- ad-mute: stale marker handling */
