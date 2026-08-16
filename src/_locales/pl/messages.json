@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "Odbiera punkty kanału i dropy, wycisza reklamy i otwiera obserwowane kanały, gdy tylko wejdą na żywo." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops i punkty" },
+  "extDescription": { "message": "Automatycznie odbiera Twitch dropy i punkty kanału, wycisza reklamy i otwiera obserwowane kanały, gdy zaczynają nadawać." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Wesprzyj autora przez Buy Me a Coffee" },
   "twitterLinkLabel": { "message": "Obserwuj @zCrxticxl na X / Twitterze" },

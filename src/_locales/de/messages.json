@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "Holt Kanalpunkte und Drops ab, schaltet Werbung stumm und öffnet gefolgte Kanäle, sobald sie live gehen." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops & Kanalpunkte" },
+  "extDescription": { "message": "Holt Twitch Drops und Kanalpunkte automatisch ab, schaltet Werbung stumm und öffnet verfolgte Kanäle beim Livegang." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Entwickler über Buy Me a Coffee unterstützen" },
   "twitterLinkLabel": { "message": "@zCrxticxl auf X / Twitter folgen" },

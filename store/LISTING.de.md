@@ -1,12 +1,16 @@
-# AD-Twitcher
+# AD-Twitcher: Twitch Drops & Kanalpunkte
+
+Name und Kurzbeschreibung stammen aus `src/_locales/de/messages.json`
+(`extName`, `extDescription`) und lassen sich im Store-Dashboard nicht ändern.
 
 ## Kurzbeschreibung
 
-Twitch-Boni und Drops einlösen, Werbung stummschalten, Live-Kanäle verfolgen und lokale Messwerte ansehen.
+Holt Twitch Drops und Kanalpunkte automatisch ab, schaltet Werbung stumm und öffnet verfolgte Kanäle beim Livegang.
 
 ## Ausführliche Beschreibung
 
-AD-Twitcher bündelt wiederkehrende Twitch-Aufgaben in einer übersichtlichen Browser-Extension.
+AD-Twitcher holt Twitch Drops und Kanalpunkte automatisch ab und bündelt die
+wiederkehrenden Twitch-Aufgaben in einer übersichtlichen Browser-Extension.
 
 Funktionen:
 

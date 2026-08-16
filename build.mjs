@@ -37,11 +37,18 @@ const targets = picked.length ? picked : TARGETS;
 const SKIP = new Set(TARGETS.map((target) => `manifest.${target}.json`));
 SKIP.add('icon512.png');
 
+/*
+ * Absolute, because PATH is not to be trusted for this one. Git Bash puts GNU
+ * tar in front of the Windows build, and GNU tar has no -a and cannot write a
+ * ZIP at all, so `--zip` silently produced nothing when the build ran there.
+ */
+const WIN_TAR = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+
 async function zipDirectory(source, destination) {
   if (process.platform === 'win32') {
     const entries = await readdir(source);
-    await execFileP('tar.exe', ['-a', '-c', '-f', destination, ...entries], { cwd: source });
-    const { stdout } = await execFileP('tar.exe', ['-t', '-f', destination]);
+    await execFileP(WIN_TAR, ['-a', '-c', '-f', destination, ...entries], { cwd: source });
+    const { stdout } = await execFileP(WIN_TAR, ['-t', '-f', destination]);
     const invalid = stdout.split(/\r?\n/).filter((entry) =>
       entry.includes('\\') || entry.startsWith('/') || entry.split('/').includes('..'));
     if (invalid.length) throw new Error(`Invalid ZIP paths: ${invalid.join(', ')}`);

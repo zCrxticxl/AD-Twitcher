@@ -1,6 +1,6 @@
 {
-  "extName": { "message": "AD-Twitcher" },
-  "extDescription": { "message": "채널 포인트와 드롭을 자동으로 받고, 광고를 음소거하며, 팔로우한 채널이 방송을 시작하면 엽니다." },
+  "extName": { "message": "AD-Twitcher: Twitch Drops 및 포인트" },
+  "extDescription": { "message": "Twitch Drops와 채널 포인트를 자동으로 수령하고 광고를 음소거하며 팔로우한 채널을 방송 시작 시 엽니다." },
   "extActionTitle": { "message": "AD-Twitcher" },
   "supportLinkLabel": { "message": "Buy Me a Coffee에서 개발자 후원" },
   "twitterLinkLabel": { "message": "X / Twitter에서 @zCrxticxl 팔로우" },
