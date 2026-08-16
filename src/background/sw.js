@@ -218,13 +218,13 @@
    * Scanning harder cannot fix that; only a reload can.
    *
    * @param {number} tabId
-   * @return {!Promise<*>}
+   * @return {!Promise<string>} The activity outcome.
    */
   function refreshInventoryTab(tabId) {
     var now = Date.now();
     if (now - (lastInventoryReload[tabId] || 0) < INVENTORY_RELOAD_COOLDOWN_MS) {
       log.debug('drops: inventory reload suppressed by cooldown');
-      return Promise.resolve(null);
+      return Promise.resolve('idle');
     }
     lastInventoryReload[tabId] = now;
     log.info('drops: inventory view predates the drop, reloading tab ' + tabId);
@@ -233,32 +233,34 @@
       .then(function () { return waitForTabLoad(tabId); })
       .then(function () { return g.ADT.sleep(INVENTORY_RENDER_MS); })
       .then(function () { return claimInTab(tabId); })
+      .then(function () { return 'reloaded'; })
       .catch(function (e) {
         log.warn('drops: inventory reload failed: ' + (e && e.message));
+        return 'error';
       });
   }
 
   /**
    * @param {!Object} tab An open /drops/inventory tab.
    * @param {!Object} s Settings.
-   * @return {!Promise<*>}
+   * @return {!Promise<string>} The activity outcome.
    */
   function claimInOpenInventory(tab, s) {
     return claimInTab(tab.id).then(function (res) {
       var report = res && res.report;
       if (report && report.pending) {
         log.info('drops: ' + report.pending + ' claim(s) running in tab ' + tab.id);
-        return null;
+        return 'claimed';
       }
       if (!s.drops.refreshInventory) {
         log.debug('drops: nothing to claim, refresh disabled');
-        return null;
+        return 'idle';
       }
       // A view younger than the drop has genuinely nothing to claim. Anything
       // older cannot be trusted to know about it yet.
       if (report && report.stale === false) {
         log.debug('drops: inventory is current, nothing to claim');
-        return null;
+        return 'idle';
       }
       return refreshInventoryTab(tab.id);
     });
@@ -266,36 +268,110 @@
 
   /**
    * @param {!Object} s Settings.
-   * @return {!Promise<*>}
+   * @return {!Promise<string>} The activity outcome.
    */
   function openInventoryTab(s) {
     return Promise.resolve(api.tabs.create({
       url: 'https://www.twitch.tv/drops/inventory',
       active: false
     })).then(function (tab) {
-      if (!tab || tab.id == null) return;
+      if (!tab || tab.id == null) return 'error';
       Promise.resolve(api.tabs.update(tab.id, { muted: true })).catch(function () {});
       log.debug('drops: inventory tab opened (' + tab.id + ')');
       api.alarms.create(ALARM_CLOSE_TAB_PREFIX + tab.id, {
         when: Date.now() + Math.max(8000, s.drops.closeAfterMs)
       });
+      return 'opened';
     });
   }
 
-  /** @return {!Promise<*>} */
-  function runDropsCheck() {
+  /* ------------------------------------------------------ activity record */
+
+  /*
+   * Everything below exists for one reason: from the outside, an extension that
+   * works perfectly and one that died three hours ago look exactly the same.
+   * Counters only move when something is actually claimed, which can be hours
+   * apart, so they prove nothing in between. The record here says when the last
+   * check ran and what came of it.
+   *
+   * It lives in storage because the worker that ran the check is usually gone
+   * by the time the popup asks.
+   */
+
+  /** @const {string} */
+  var ACTIVITY_KEY = 'activityRuntime';
+
+  /**
+   * @param {string} outcome 'claimed', 'reloaded', 'opened', 'idle', 'off' or
+   *     'error'. The popup maps these to localized text.
+   * @param {string} trigger 'alarm', 'unlock' or 'popup'.
+   * @return {!Promise<void>}
+   */
+  function noteDropsCheck(outcome, trigger) {
+    var out = {};
+    out[ACTIVITY_KEY] = {
+      lastCheckAt: Date.now(),
+      outcome: outcome,
+      trigger: trigger
+    };
+    return Promise.resolve(api.storage.local.set(out)).catch(function () {});
+  }
+
+  /** @return {!Promise<!Object>} */
+  function loadActivity() {
+    return Promise.resolve(api.storage.local.get(ACTIVITY_KEY)).then(function (res) {
+      return (res && res[ACTIVITY_KEY]) || {};
+    }).catch(function () {
+      return {};
+    });
+  }
+
+  /** @return {!Promise<number>} When the drops alarm fires next, 0 if unknown. */
+  function nextDropsCheckAt() {
+    if (!api.alarms || !api.alarms.get) return Promise.resolve(0);
+    return Promise.resolve(api.alarms.get(ALARM_DROPS)).then(function (alarm) {
+      return (alarm && alarm.scheduledTime) || 0;
+    }).catch(function () {
+      return 0;
+    });
+  }
+
+  /** @return {!Promise<!Object>} */
+  function activityStatus() {
+    return Promise.all([
+      loadActivity(),
+      g.ADT.watchHealth.status(),
+      nextDropsCheckAt()
+    ]).then(function (r) {
+      return { drops: r[0], watching: r[1], nextCheckAt: r[2] };
+    });
+  }
+
+  /**
+   * @param {string=} trigger What asked for this check.
+   * @return {!Promise<*>}
+   */
+  function runDropsCheck(trigger) {
+    var how = trigger || 'alarm';
     return g.ADT.settings.get().then(function (s) {
-      if (!s.enabled || !s.drops.enabled || !s.drops.autoClaim) return null;
-      if (!s.drops.openInventoryTab) return null;
+      if (!s.enabled || !s.drops.enabled || !s.drops.autoClaim) {
+        return noteDropsCheck('off', how);
+      }
+      if (!s.drops.openInventoryTab) return noteDropsCheck('off', how);
 
       return Promise.resolve(api.tabs.query({
         url: ['*://*.twitch.tv/drops/inventory', '*://*.twitch.tv/drops/inventory?*']
       })).then(function (tabs) {
-        if (tabs && tabs.length) return claimInOpenInventory(tabs[0], s);
-        return openInventoryTab(s);
+        var run = (tabs && tabs.length)
+          ? claimInOpenInventory(tabs[0], s)
+          : openInventoryTab(s);
+        return run.then(function (outcome) {
+          return noteDropsCheck(outcome || 'idle', how);
+        });
       });
     }).catch(function (e) {
       log.error('drops-check: ' + (e && e.message));
+      return noteDropsCheck('error', how);
     });
   }
 
@@ -536,21 +612,21 @@
         return true;
 
       case 'adt:status':
-        Promise.all([g.ADT.settings.get(), g.ADT.liveWatch.status()])
+        Promise.all([g.ADT.settings.get(), g.ADT.liveWatch.status(), activityStatus()])
           .then(function (r) {
-            sendResponse({ ok: true, settings: r[0], live: r[1] });
+            sendResponse({ ok: true, settings: r[0], live: r[1], activity: r[2] });
           });
         return true;  // Async response.
 
       case 'adt:drops-check-now':
-        runDropsCheck().then(function () { sendResponse({ ok: true }); });
+        runDropsCheck('popup').then(function () { sendResponse({ ok: true }); });
         return true;
 
       // Raised by the content script when Twitch shows the unlock notification.
       // This is the primary trigger; the alarm is only a fallback.
       case 'adt:drop-unlocked':
         log.info('Drop unlock reported: ' + (msg.text || ''));
-        runDropsCheck();
+        runDropsCheck('unlock');
         sendResponse({ ok: true });
         return true;
 

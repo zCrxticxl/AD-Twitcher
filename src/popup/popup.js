@@ -203,6 +203,77 @@
     return ADT.msg('agoHours', Math.round(s / 3600));
   }
 
+  /**
+   * @param {number} ms
+   * @return {string} A duration, not a point in time. "2 h 5 min", never "ago".
+   */
+  function duration(ms) {
+    var minutes = Math.max(0, Math.round(ms / 60000));
+    if (minutes < 60) return ADT.msg('durationMinutes', minutes);
+    return ADT.msg('durationHours', [String(Math.floor(minutes / 60)), String(minutes % 60)]);
+  }
+
+  /** @const {!Object<string, string>} Drops-check outcome to message key. */
+  var DROPS_OUTCOMES = {
+    claimed: 'dropsOutcomeClaimed',
+    reloaded: 'dropsOutcomeReloaded',
+    opened: 'dropsOutcomeOpened',
+    idle: 'dropsOutcomeIdle',
+    off: 'dropsOutcomeOff',
+    error: 'dropsOutcomeError'
+  };
+
+  /** @const {!Object<string, string>} Stats key to the label already in use. */
+  var ACTION_LABELS = {
+    pointsClaimed: 'statBonuses',
+    dropsClaimed: 'statDrops',
+    adsMuted: 'statAdsMuted',
+    streamsOpened: 'statTabsOpened'
+  };
+
+  /**
+   * The proof-of-life card. Counters alone cannot show that anything is
+   * happening, because hours can pass between two claims; these rows can.
+   *
+   * @param {!Object} activity Background activityStatus() result.
+   * @param {!Object} stats
+   */
+  function renderActivity(activity, stats) {
+    var watched = (activity && activity.watching) || [];
+    var top = watched[0];
+
+    if (top && top.channel) {
+      var state = top.reason
+        ? ADT.msg('watchStateStalled')
+        : (top.playing ? ADT.msg('watchStatePlaying') : ADT.msg('watchStatePaused'));
+      $('acWatching').textContent = top.channel + ' · ' + state;
+      $('acFor').textContent = top.since ? duration(Date.now() - top.since) : EMPTY;
+    } else {
+      $('acWatching').textContent = EMPTY;
+      $('acFor').textContent = EMPTY;
+    }
+
+    var drops = (activity && activity.drops) || {};
+    if (drops.lastCheckAt) {
+      var outcome = ADT.msg(DROPS_OUTCOMES[drops.outcome] || 'dropsOutcomeIdle');
+      $('acDrops').textContent = ago(drops.lastCheckAt) + ' · ' + outcome;
+    } else {
+      $('acDrops').textContent = ADT.msg('agoNever');
+    }
+
+    var next = activity && activity.nextCheckAt;
+    $('acNext').textContent = next && next > Date.now()
+      ? ADT.msg('inMinutes', Math.max(1, Math.round((next - Date.now()) / 60000)))
+      : EMPTY;
+
+    var labelKey = stats && ACTION_LABELS[stats.lastAction];
+    $('acClaim').textContent = labelKey && stats.lastActivityAt
+      ? ADT.msg(labelKey) + ' · ' + ago(stats.lastActivityAt)
+      : ADT.msg('agoNever');
+
+    $('acHint').textContent = watched.length ? '' : ADT.msg('activityHintIdle');
+  }
+
   /** @param {!Object} live liveWatch.status() result. */
   function renderLive(live) {
     $('lwAge').textContent = ago(live.lastReportAt);
@@ -536,10 +607,20 @@
 
   function refreshAll() {
     ADT.settings.get().then(renderSettings);
-    ADT.settings.getStats().then(renderStats);
 
-    ADT.send({ type: 'adt:status' }).then(function (res) {
-      if (res && res.ok) renderLive(res.live);
+    // Stats and status are rendered together because the activity card needs
+    // both: the last claim comes from the counters, the rest from the worker.
+    Promise.all([
+      ADT.settings.getStats(),
+      ADT.send({ type: 'adt:status' })
+    ]).then(function (r) {
+      var stats = r[0];
+      var res = r[1];
+      renderStats(stats);
+      if (res && res.ok) {
+        renderLive(res.live);
+        renderActivity(res.activity || {}, stats);
+      }
     });
 
     findTwitchTab().then(function (t) {

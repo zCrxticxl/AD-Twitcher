@@ -25,6 +25,7 @@
  *  [16] creator links point where they claim to
  *  [17] a stale inventory view is reloaded instead of scanned again
  *  [18] the popup shows the installed version, read from the manifest
+ *  [19] the popup can prove the extension is still working
  */
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -585,6 +586,47 @@ console.log('\n[18] Version badge');
   /<span class="creator-version"[^>]*><\/span>/.test(html)
     ? ok('no version number is hardcoded in the markup')
     : fail('popup.html hardcodes a version that will go stale');
+}
+
+console.log('\n[19] Activity card');
+{
+  /*
+   * A working extension and a dead one look identical from the outside: the
+   * counters only move when something is claimed, which can be hours apart.
+   * The activity record is what closes that gap, so it has to survive a worker
+   * restart, which means storage rather than a variable.
+   */
+  const sw = await readFile(join(SRC, 'background/sw.js'), 'utf8');
+  const watch = await readFile(join(SRC, 'background/watch-health.js'), 'utf8');
+  const html = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
+  const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+
+  /var ACTIVITY_KEY = 'activityRuntime'/.test(sw) &&
+      /api\.storage\.local\.set\(out\)/.test(sw)
+    ? ok('the drops check records its outcome in storage')
+    : fail('the activity record would not survive a worker restart');
+
+  /function noteDropsCheck/.test(sw) &&
+      /noteDropsCheck\('error'/.test(sw) && /noteDropsCheck\('off'/.test(sw)
+    ? ok('a skipped or failed check is recorded too')
+    : fail('only successful checks are recorded, so silence stays ambiguous');
+
+  /activity: r\[2\]/.test(sw) && /function activityStatus/.test(sw)
+    ? ok('the status answer carries the activity block')
+    : fail('background/sw.js does not report activity to the popup');
+
+  /function status\(\)/.test(watch) && /g\.ADT\.watchHealth = \{[\s\S]*status: status/.test(watch)
+    ? ok('the watchdog exposes which tabs it is watching')
+    : fail('watch-health keeps its runtime to itself');
+
+  /id="acWatching"/.test(html) && /id="acDrops"/.test(html) &&
+      /id="acNext"/.test(html) && /id="acClaim"/.test(html)
+    ? ok('the popup has a row for each activity signal')
+    : fail('popup.html is missing activity rows');
+
+  /function renderActivity/.test(js) && /DROPS_OUTCOMES/.test(js)
+    ? ok('outcomes are localized, not printed raw')
+    : fail('popup.js would show raw outcome identifiers');
 }
 
 console.log(errors ? `\n${errors} problem(s).\n` : '\nAll clean.\n');
