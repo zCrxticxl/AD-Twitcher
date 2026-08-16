@@ -67,6 +67,11 @@
   "durationMinutes": { "message": "$1 Min" },
   "durationHours": { "message": "$1 Std $2 Min" },
   "activityHintIdle": { "message": "Gerade wird kein Twitch-Tab überwacht. Öffne einen Kanal, um zu starten." },
+  "cardDropProgress": { "message": "Drop-Fortschritt" },
+  "dropRemaining": { "message": "noch $1" },
+  "dropReady": { "message": "fertig" },
+  "dropUnnamed": { "message": "Drop" },
+  "dropProgressEmpty": { "message": "Noch kein Fortschritt gelesen. Er wird von der Drops-Inventarseite geholt, sobald sie das nächste Mal offen ist." },
 
   "btnDropsNow": { "message": "Drops jetzt prüfen" },
   "btnDropsNowBusy": { "message": "Prüft…" },

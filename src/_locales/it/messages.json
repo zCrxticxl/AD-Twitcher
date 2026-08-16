@@ -67,6 +67,11 @@
   "durationMinutes": { "message": "$1 min" },
   "durationHours": { "message": "$1 h $2 min" },
   "activityHintIdle": { "message": "Al momento non viene sorvegliata nessuna scheda Twitch. Apri un canale per iniziare." },
+  "cardDropProgress": { "message": "Avanzamento drops" },
+  "dropRemaining": { "message": "mancano $1" },
+  "dropReady": { "message": "pronto" },
+  "dropUnnamed": { "message": "Drop" },
+  "dropProgressEmpty": { "message": "Nessun avanzamento letto finora. Viene preso dalla pagina inventario drops alla prossima apertura." },
 
   "btnDropsNow": { "message": "Controlla i drop ora" },
   "btnDropsNowBusy": { "message": "Controllo…" },

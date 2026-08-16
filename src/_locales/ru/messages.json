@@ -67,6 +67,11 @@
   "durationMinutes": { "message": "$1 мин" },
   "durationHours": { "message": "$1 ч $2 мин" },
   "activityHintIdle": { "message": "Сейчас ни одна вкладка Twitch не отслеживается. Откройте канал, чтобы начать." },
+  "cardDropProgress": { "message": "Прогресс дропов" },
+  "dropRemaining": { "message": "ещё $1" },
+  "dropReady": { "message": "готово" },
+  "dropUnnamed": { "message": "Дроп" },
+  "dropProgressEmpty": { "message": "Прогресс ещё не считан. Он берётся со страницы инвентаря дропов при следующем её открытии." },
 
   "btnDropsNow": { "message": "Проверить дропы" },
   "btnDropsNowBusy": { "message": "Проверка…" },

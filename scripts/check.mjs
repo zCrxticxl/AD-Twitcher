@@ -26,6 +26,7 @@
  *  [17] a stale inventory view is reloaded instead of scanned again
  *  [18] the popup shows the installed version, read from the manifest
  *  [19] the popup can prove the extension is still working
+ *  [20] drop progress is read, validated and shown
  */
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -627,6 +628,40 @@ console.log('\n[19] Activity card');
   /function renderActivity/.test(js) && /DROPS_OUTCOMES/.test(js)
     ? ok('outcomes are localized, not printed raw')
     : fail('popup.js would show raw outcome identifiers');
+}
+
+console.log('\n[20] Drop progress');
+{
+  /*
+   * The percentages are read off the inventory page, so the caption is
+   * localized and its word order is not fixed. Nothing may parse the sentence,
+   * and the values arrive from a content script, which is untrusted input.
+   */
+  const drops = await readFile(join(SRC, 'content/modules/drops.js'), 'utf8');
+  const sw = await readFile(join(SRC, 'background/sw.js'), 'utf8');
+  const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+  const html = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
+
+  /function parseProgress/.test(drops) && /%\\s\*\(/.test(drops)
+    ? ok('the caption is read in both percent-sign orders')
+    : fail('drops.js only reads one percent-sign order, which breaks Turkish');
+
+  /function collectProgress/.test(drops) && /state\.mode !== 'claim'/.test(drops)
+    ? ok('progress is only read on the inventory page')
+    : fail('drops.js scrapes progress outside the inventory');
+
+  /function storeProgress/.test(sw) && /Array\.isArray\(items\)/.test(sw) &&
+      /slice\(0, MAX_PROGRESS_ITEMS\)/.test(sw)
+    ? ok('the background validates and caps what the page reported')
+    : fail('background/sw.js trusts the scraped progress unchecked');
+
+  /createElement\('div'\)/.test(js) && !/dpList[^\n]*innerHTML/.test(js)
+    ? ok('progress rows are built as nodes, not as markup')
+    : fail('popup.js builds progress rows from a string');
+
+  /id="dpList"/.test(html)
+    ? ok('the popup has a progress card')
+    : fail('popup.html has no progress card');
 }
 
 console.log(errors ? `\n${errors} problem(s).\n` : '\nAll clean.\n');

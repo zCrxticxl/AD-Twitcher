@@ -67,6 +67,11 @@
   "durationMinutes": { "message": "$1 dk" },
   "durationHours": { "message": "$1 sa $2 dk" },
   "activityHintIdle": { "message": "Şu anda izlenen bir Twitch sekmesi yok. Başlamak için bir kanal aç." },
+  "cardDropProgress": { "message": "Drops ilerlemesi" },
+  "dropRemaining": { "message": "$1 kaldı" },
+  "dropReady": { "message": "hazır" },
+  "dropUnnamed": { "message": "Drop" },
+  "dropProgressEmpty": { "message": "Henüz ilerleme okunmadı. Drops envanter sayfası bir sonraki açılışında alınacak." },
 
   "btnDropsNow": { "message": "Dropları şimdi kontrol et" },
   "btnDropsNowBusy": { "message": "Kontrol ediliyor…" },

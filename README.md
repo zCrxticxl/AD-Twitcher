@@ -40,6 +40,15 @@ all twelve caption sets rather than English only.
 The background half opens and closes tabs for auto-join, runs the periodic drops
 check and owns the counters.
 
+**How much longer.** The inventory page prints how far every drop has come, so
+the claimer reads those captions while it is there and hands them to the popup,
+which turns them into a remaining time. The caption is localized and its word
+order is not: German writes "85 % von 4 Stunden", Japanese "4 時間中 85%",
+Turkish puts the sign in front of the number. Nothing parses the sentence - the
+number carrying the percent sign is the progress, the other number is the
+requirement. The estimate assumes uninterrupted watching, which is what the
+watchdog exists to keep true.
+
 **Telling "working" from "dead".** Lifetime counters only move when something is
 actually claimed, so between two drops they prove nothing. The status tab
 therefore has an activity card: which channel is being watched and for how long,
