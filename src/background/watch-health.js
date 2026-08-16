@@ -187,10 +187,40 @@
     });
   }
 
+  /**
+   * The watchdog already knows which tabs are alive; this exposes it so the
+   * popup can show that watching is actually happening rather than leaving the
+   * user to guess from a counter that only moves once an hour.
+   *
+   * @return {!Promise<!Array<!Object>>} Watched tabs, most recent heartbeat
+   *     first.
+   */
+  function status() {
+    return loadRt().then(function (rt) {
+      return Object.keys(rt.tabs).map(function (key) {
+        var item = rt.tabs[key] || {};
+        return {
+          tabId: Number(key),
+          channel: item.channel || '',
+          playing: !!item.playing,
+          reason: item.reason || '',
+          since: Number(item.firstSeenAt || 0),
+          lastProgressAt: Number(item.lastProgressAt || 0),
+          lastHeartbeatAt: Number(item.lastHeartbeatAt || 0)
+        };
+      }).sort(function (a, b) {
+        return b.lastHeartbeatAt - a.lastHeartbeatAt;
+      });
+    }).catch(function () {
+      return [];
+    });
+  }
+
   g.ADT.watchHealth = {
     handleHeartbeat: handleHeartbeat,
     forgetTab: forgetTab,
     check: check,
+    status: status,
     loadRt: loadRt,
     saveRt: saveRt
   };

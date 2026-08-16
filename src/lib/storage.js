@@ -89,7 +89,8 @@
     adsMuted: 0,
     streamsOpened: 0,
     trackingSince: 0,
-    lastActivityAt: 0
+    lastActivityAt: 0,
+    lastAction: ''             // Which counter moved last, for the activity card.
   };
 
   /**
@@ -206,6 +207,7 @@
         var now = Date.now();
         if (!next.trackingSince) next.trackingSince = now;
         next.lastActivityAt = now;
+        next.lastAction = key;
         next[key] = (cur[key] || 0) + (by || 1);
         var o = {};
         o[STATS_KEY] = next;

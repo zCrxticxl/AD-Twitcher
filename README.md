@@ -40,6 +40,14 @@ all twelve caption sets rather than English only.
 The background half opens and closes tabs for auto-join, runs the periodic drops
 check and owns the counters.
 
+**Telling "working" from "dead".** Lifetime counters only move when something is
+actually claimed, so between two drops they prove nothing. The status tab
+therefore has an activity card: which channel is being watched and for how long,
+when the last drops check ran and what came of it, when the next one is due, and
+what was claimed last. Every check writes its outcome to `storage.local` -
+including the ones that found nothing, were switched off or failed - so the card
+stays honest after the service worker has been terminated and restarted.
+
 ## Build and install
 
 ```bash

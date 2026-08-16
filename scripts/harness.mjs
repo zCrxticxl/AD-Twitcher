@@ -220,7 +220,11 @@ function swSandbox(storage = {}, tabs = {}) {
       onRemoved: {addListener() {}},
       onUpdated: {addListener() {}, removeListener() {}}
     },
-    alarms: {create() {}, clear() {}, onAlarm: {addListener() {}}},
+    alarms: {
+      create() {}, clear() {},
+      get: () => Promise.resolve({scheduledTime: 1700000000000}),
+      onAlarm: {addListener() {}}
+    },
     runtime: {
       id: 'adt',
       getManifest: () => ({manifest_version: 3, content_scripts: [{js: [], css: []}]}),
@@ -250,7 +254,14 @@ function swSandbox(storage = {}, tabs = {}) {
         onChange() {}
       },
       liveWatch: {forgetTab() {}, status: () => Promise.resolve({})},
-      watchHealth: {forgetTab() {}, check: () => Promise.resolve()},
+      watchHealth: {
+        forgetTab() {},
+        check: () => Promise.resolve(),
+        status: () => Promise.resolve([
+          {tabId: 5, channel: 'shroud', playing: true, reason: '', since: 1000,
+            lastProgressAt: 2000, lastHeartbeatAt: 2000}
+        ])
+      },
       pingTab: () => Promise.resolve({ok: true}),
       sendToTab(tabId, msg) {
         if (msg.type === 'adt:claim-drops-now') {
@@ -270,8 +281,16 @@ function swSandbox(storage = {}, tabs = {}) {
   return {
     storage, tabs, updates, reloads, claims,
     setClaimReport(report) { claimReport = report; },
+    /**
+     * The worker answers asynchronously, so the reply is read off the returned
+     * handle after settle() rather than from a return value.
+     */
     send(msg, tabId) {
-      messageHandlers.forEach((fn) => fn(msg, {tab: {id: tabId}}, () => {}));
+      const reply = {response: undefined};
+      messageHandlers.forEach((fn) => fn(msg, {tab: {id: tabId}}, (res) => {
+        reply.response = res;
+      }));
+      return reply;
     },
     /** Lets the promise chains inside the worker run to completion. */
     async settle(rounds = 12) {
@@ -490,6 +509,42 @@ console.log('\n[lifecycle harness]');
   await h.settle();
   assert('a tab that is already claiming is not reloaded underneath itself',
     h.reloads.length === 0);
+}
+{
+  /*
+   * The activity record. Without it the popup cannot distinguish an extension
+   * that checked two minutes ago and found nothing from one that died at noon.
+   */
+  const tabs = {5: {id: 5, inventory: true, mutedInfo: {muted: false}}};
+  const h = swSandbox({}, tabs);
+  h.setClaimReport({ok: true, report: {mode: 'claim', pending: 2, stale: true}});
+
+  h.send({type: 'adt:drops-check-now'}, 3);
+  await h.settle();
+  const claimed = h.storage.activityRuntime;
+  assert('a check with something to claim is recorded as claimed',
+    !!claimed && claimed.outcome === 'claimed');
+  assert('and remembers that the popup asked for it', claimed.trigger === 'popup');
+  assert('and carries a timestamp', typeof claimed.lastCheckAt === 'number' &&
+    claimed.lastCheckAt > 0);
+
+  h.setClaimReport({ok: true, report: {mode: 'claim', pending: 0, stale: false}});
+  h.send({type: 'adt:drop-unlocked', text: 'Drop unlocked'}, 3);
+  await h.settle();
+  assert('a check that found nothing is recorded as idle',
+    h.storage.activityRuntime.outcome === 'idle');
+  assert('and remembers the unlock notification triggered it',
+    h.storage.activityRuntime.trigger === 'unlock');
+
+  const reply = h.send({type: 'adt:status'}, 3);
+  await h.settle();
+  const activity = reply.response && reply.response.activity;
+  assert('the status answer carries the activity record',
+    !!activity && activity.drops.outcome === 'idle');
+  assert('and what is being watched right now',
+    !!activity && activity.watching.length === 1 &&
+    activity.watching[0].channel === 'shroud');
+  assert('and when the next check is due', activity.nextCheckAt === 1700000000000);
 }
 
 console.log(failures ? `\n${failures} harness failure(s).\n` : '\nLifecycle harness clean.\n');

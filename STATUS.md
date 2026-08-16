@@ -60,6 +60,14 @@ live Twitch behavior still requires manual browser sessions.
 15. The popup footer shows the installed version in its bottom right corner. It
     is read from the manifest at runtime, which `build.mjs` stamps from
     `package.json`, so the badge cannot drift from the loaded package.
+16. The status tab has an activity card, because a working extension and a dead
+    one used to look identical: lifetime counters only move when something is
+    claimed, and hours can pass in between. It shows the channel being watched
+    and for how long, when the last drops check ran and what came of it
+    (claimed, reloaded, opened, idle, off, error), when the next one is due, and
+    what was claimed last. The drops outcome is written to `activityRuntime` in
+    `storage.local` on every check, including skipped and failed ones, so the
+    record survives the service worker that produced it.
 
 ## 0.2.0
 
