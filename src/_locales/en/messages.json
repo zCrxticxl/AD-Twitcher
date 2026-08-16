@@ -69,8 +69,8 @@
   "activityHintIdle": { "message": "No Twitch tab is being watched right now. Open a channel to start." },
   "cardDropProgress": { "message": "Drop progress" },
   "dropRemaining": { "message": "$1 left" },
-  "dropReady": { "message": "ready" },
   "dropUnnamed": { "message": "Drop" },
+  "dropProgressDone": { "message": "Done" },
   "dropProgressEmpty": { "message": "No progress read yet. It is taken from the Drops inventory page the next time it is open." },
 
   "btnDropsNow": { "message": "Check drops now" },

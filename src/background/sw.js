@@ -340,15 +340,27 @@
   var PROGRESS_KEY = 'dropsProgress';
 
   /** @const {number} Stored per snapshot, after ranking, never before. */
-  var MAX_PROGRESS_ITEMS = 20;
+  var MAX_PROGRESS_ITEMS = 40;
+
+  /**
+   * Running drops first, nearest to finished at the top; then the ones whose
+   * requirement could not be read; finished drops last, since the popup only
+   * marks those. Ordering here decides what survives the cap.
+   *
+   * @param {!Object} item
+   * @return {number}
+   */
+  function progressRank(item) {
+    if (item.percent >= 100) return 3;
+    return item.hours ? 1 : 2;
+  }
 
   /**
    * @param {!Object} item
-   * @return {number} Milliseconds left. A drop whose requirement is unknown
-   *     sorts last rather than first, because 0 would read as "almost done".
+   * @return {number} Milliseconds left, 0 when the requirement is unknown.
    */
   function remainingMs(item) {
-    if (!item.hours) return Infinity;
+    if (!item.hours) return 0;
     return item.hours * 3600000 * (1 - (item.percent || 0) / 100);
   }
 
@@ -376,7 +388,7 @@
         hours: isFinite(hours) && hours > 0 ? hours : 0
       };
     }).sort(function (a, b) {
-      return remainingMs(a) - remainingMs(b);   // Nearest to finished first.
+      return progressRank(a) - progressRank(b) || remainingMs(a) - remainingMs(b);
     }).slice(0, MAX_PROGRESS_ITEMS);
     if (!clean.length) return Promise.resolve();
 

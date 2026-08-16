@@ -69,8 +69,8 @@
   "activityHintIdle": { "message": "当前没有正在监视的 Twitch 标签页。打开一个频道即可开始。" },
   "cardDropProgress": { "message": "掉落进度" },
   "dropRemaining": { "message": "还需 $1" },
-  "dropReady": { "message": "已完成" },
   "dropUnnamed": { "message": "掉落" },
+  "dropProgressDone": { "message": "已完成" },
   "dropProgressEmpty": { "message": "尚未读取进度。下次打开掉落库存页面时会获取。" },
 
   "btnDropsNow": { "message": "立即检查掉宝" },

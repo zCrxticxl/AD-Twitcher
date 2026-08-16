@@ -274,8 +274,81 @@
     $('acHint').textContent = watched.length ? '' : ADT.msg('activityHintIdle');
   }
 
-  /** @const {number} Rows in the progress card. More is a wall, not an answer. */
-  var PROGRESS_ROWS = 4;
+  /**
+   * One row per running drop.
+   *
+   * @param {!Object} item
+   * @return {!Element}
+   */
+  function progressRow(item) {
+    var row = document.createElement('div');
+    row.className = 'dp-row';
+
+    var head = document.createElement('div');
+    head.className = 'dp-head';
+
+    var name = document.createElement('span');
+    name.className = 'dp-name';
+    name.textContent = item.name || ADT.msg('dropUnnamed');
+
+    var value = document.createElement('span');
+    value.className = 'dp-value';
+    var left = remainingMs(item);
+    value.textContent = ADT.formatNumber(Math.round(item.percent)) + ' %' +
+      (item.hours ? ' · ' + ADT.msg('dropRemaining', duration(left)) : '');
+
+    head.appendChild(name);
+    head.appendChild(value);
+    row.appendChild(head);
+
+    if (item.campaign) {
+      var campaign = document.createElement('span');
+      campaign.className = 'dp-campaign';
+      campaign.textContent = item.campaign;
+      row.appendChild(campaign);
+    }
+
+    var track = document.createElement('div');
+    track.className = 'dp-track';
+    track.setAttribute('role', 'progressbar');
+    track.setAttribute('aria-valuenow', String(Math.round(item.percent)));
+    track.setAttribute('aria-valuemin', '0');
+    track.setAttribute('aria-valuemax', '100');
+
+    var fill = document.createElement('div');
+    fill.className = 'dp-fill';
+    fill.style.width = Math.max(1, Math.min(100, item.percent)) + '%';
+
+    track.appendChild(fill);
+    row.appendChild(track);
+    return row;
+  }
+
+  /**
+   * Finished drops as markers rather than rows: they carry no remaining time,
+   * and a full row each would push the running ones out of view.
+   *
+   * @param {!Array<!Object>} items
+   * @return {!Element}
+   */
+  function doneRow(items) {
+    var wrap = document.createElement('div');
+    wrap.className = 'dp-done';
+
+    var label = document.createElement('span');
+    label.className = 'dp-done__label';
+    label.textContent = ADT.msg('dropProgressDone');
+    wrap.appendChild(label);
+
+    items.forEach(function (item) {
+      var chip = document.createElement('span');
+      chip.className = 'dp-chip';
+      chip.textContent = item.name || ADT.msg('dropUnnamed');
+      if (item.campaign) chip.title = item.campaign;
+      wrap.appendChild(chip);
+    });
+    return wrap;
+  }
 
   /**
    * How much longer each drop needs, closest first. The percentage comes from
@@ -287,43 +360,25 @@
    */
   function renderProgress(progress) {
     var list = $('dpList');
-    var items = ((progress && progress.items) || []).slice();
+    var items = (progress && progress.items) || [];
 
     while (list.firstChild) list.removeChild(list.firstChild);
 
-    items.sort(function (a, b) {
-      return remainingMs(a) - remainingMs(b);
+    var running = items.filter(function (item) { return item.percent < 100; });
+    running.sort(function (a, b) { return remainingMs(a) - remainingMs(b); });
+    running.forEach(function (item) { list.appendChild(progressRow(item)); });
+
+    // The same tier can be finished in two campaigns running under one name;
+    // as a marker that is a repetition, not information.
+    var seen = {};
+    var done = items.filter(function (item) {
+      if (item.percent < 100) return false;
+      var key = item.campaign + ' ' + item.name;
+      if (seen[key]) return false;
+      seen[key] = true;
+      return true;
     });
-
-    items.slice(0, PROGRESS_ROWS).forEach(function (item) {
-      var row = document.createElement('div');
-      row.className = 'kv';
-
-      var name = document.createElement('span');
-      name.textContent = item.name || ADT.msg('dropUnnamed');
-
-      // "Common 1" means nothing on its own; the campaign is what identifies it.
-      if (item.campaign) {
-        var campaign = document.createElement('small');
-        campaign.className = 'muted';
-        campaign.textContent = item.campaign;
-        name.appendChild(document.createElement('br'));
-        name.appendChild(campaign);
-      }
-
-      var value = document.createElement('b');
-      var left = remainingMs(item);
-      value.textContent = ADT.formatNumber(Math.round(item.percent)) + ' % · ' +
-        (item.percent >= 100 || left <= 0
-          ? ADT.msg('dropReady')
-          : (item.hours
-            ? ADT.msg('dropRemaining', duration(left))
-            : EMPTY));
-
-      row.appendChild(name);
-      row.appendChild(value);
-      list.appendChild(row);
-    });
+    if (done.length) list.appendChild(doneRow(done));
 
     $('dpUpdated').textContent = progress && progress.updatedAt
       ? ago(progress.updatedAt)
@@ -341,6 +396,8 @@
     if (!item || !item.hours) return Infinity;
     return Math.max(0, item.hours * 3600000 * (1 - (item.percent || 0) / 100));
   }
+
+  /* ------------------------------------------------------------ live watch */
 
   /** @param {!Object} live liveWatch.status() result. */
   function renderLive(live) {

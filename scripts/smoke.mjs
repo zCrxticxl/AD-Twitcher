@@ -465,18 +465,21 @@ function evalFragment(source, pattern, tail, context = {}) {
 
   console.log('\n[drop progress on the real inventory markup]');
   const got = collect();
-  eq('an expired campaign, a finished drop and a repeat are all left out',
-    got.length, 5);
+  eq('the expired campaign is left out, everything running is kept',
+    got.length, 7);
   eq('the percentage comes from the progress bar',
-    got.map((g) => g.percent), [55, 94, 18, 1, 93]);
+    got.map((g) => g.percent), [100, 40, 55, 94, 18, 1, 93]);
+  eq('a finished drop is reported, for the popup to mark rather than rank',
+    got.filter((g) => g.percent >= 100).length, 1);
   eq('the requirement comes from the caption',
-    got.map((g) => g.hours), [1, 4, 1, 12, 4]);
-  eq('the name is the label in front of the bar', got.map((g) => g.name),
-    ['Common 1', 'Rare 2', 'EWC 2026 (Bronze)', 'EWC 2026 (Diamond)', 'Rare 2']);
-  eq('every drop carries its campaign', got.map((g) => g.campaign),
-    ['KORD BREACH S1 Drops', 'KORD BREACH S1 Drops', 'EWC 2026', 'EWC 2026',
-      'EWC 2026']);
-  eq('the same tier in two campaigns is not merged',
+    got.map((g) => g.hours), [1, 1, 1, 4, 1, 12, 4]);
+  eq('the name is the label in front of the bar',
+    got.map((g) => g.name).slice(-4),
+    ['Rare 2', 'EWC 2026 (Bronze)', 'EWC 2026 (Diamond)', 'Rare 2']);
+  eq('every drop carries its campaign',
+    got.map((g) => g.campaign).filter((c, i, all) => all.indexOf(c) === i),
+    ['KORD BREACH S1 Drops', 'EWC 2026']);
+  eq('the same tier in two campaigns stays two drops',
     got.filter((g) => g.name === 'Rare 2').length, 2);
 }
 

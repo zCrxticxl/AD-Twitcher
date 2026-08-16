@@ -69,8 +69,8 @@
   "activityHintIdle": { "message": "Şu anda izlenen bir Twitch sekmesi yok. Başlamak için bir kanal aç." },
   "cardDropProgress": { "message": "Drops ilerlemesi" },
   "dropRemaining": { "message": "$1 kaldı" },
-  "dropReady": { "message": "hazır" },
   "dropUnnamed": { "message": "Drop" },
+  "dropProgressDone": { "message": "Tamam" },
   "dropProgressEmpty": { "message": "Henüz ilerleme okunmadı. Drops envanter sayfası bir sonraki açılışında alınacak." },
 
   "btnDropsNow": { "message": "Dropları şimdi kontrol et" },

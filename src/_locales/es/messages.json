@@ -69,8 +69,8 @@
   "activityHintIdle": { "message": "Ahora mismo no se vigila ninguna pestaña de Twitch. Abre un canal para empezar." },
   "cardDropProgress": { "message": "Progreso de drops" },
   "dropRemaining": { "message": "faltan $1" },
-  "dropReady": { "message": "listo" },
   "dropUnnamed": { "message": "Drop" },
+  "dropProgressDone": { "message": "Listos" },
   "dropProgressEmpty": { "message": "Aún no se ha leído el progreso. Se toma de la página de inventario de drops la próxima vez que esté abierta." },
 
   "btnDropsNow": { "message": "Comprobar drops ahora" },

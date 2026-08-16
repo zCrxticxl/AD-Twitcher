@@ -69,8 +69,8 @@
   "activityHintIdle": { "message": "Żadna karta Twitcha nie jest teraz nadzorowana. Otwórz kanał, aby zacząć." },
   "cardDropProgress": { "message": "Postęp dropów" },
   "dropRemaining": { "message": "jeszcze $1" },
-  "dropReady": { "message": "gotowe" },
   "dropUnnamed": { "message": "Drop" },
+  "dropProgressDone": { "message": "Gotowe" },
   "dropProgressEmpty": { "message": "Nie odczytano jeszcze postępu. Zostanie pobrany ze strony ekwipunku dropów przy następnym otwarciu." },
 
   "btnDropsNow": { "message": "Sprawdź dropy teraz" },
