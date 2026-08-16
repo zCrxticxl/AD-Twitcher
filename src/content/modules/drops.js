@@ -180,11 +180,117 @@
   /** @const {number} How often the age above is evaluated. */
   var FRESHNESS_TICK_MS = 60000;
 
+  /* -------------------------------------------------------- drop progress */
+
+  /*
+   * The inventory page already prints how far every drop has come. Reading it
+   * costs nothing and answers the question the counters cannot: how much longer
+   * this is going to take.
+   *
+   * The caption is localized and its word order differs - "85% of 4 hours" in
+   * English, "4 時間中 85%" in Japanese - so nothing here tries to understand the
+   * sentence. The number carrying the percent sign is the progress, the other
+   * number is the requirement. That holds in all twelve languages Twitch ships.
+   */
+
+  /** @const {number} Captions are short; anything longer is prose, not a value. */
+  var PROGRESS_TEXT_MAX = 60;
+
+  /** @const {number} Kept per report, so one huge inventory cannot flood storage. */
+  var MAX_PROGRESS_ITEMS = 8;
+
+  /** @const {number} How often a snapshot is sent while the page stays open. */
+  var PROGRESS_TICK_MS = 120000;
+
+  /** @const {number} Ancestors searched for the drop's name. */
+  var NAME_LOOKUP_DEPTH = 4;
+
+  /**
+   * @param {string} text A progress caption.
+   * @return {?{percent: number, hours: number}} Null when the text carries no
+   *     percentage, which is most of the page.
+   */
+  function parseProgress(text) {
+    // \s already matches the no-break space Twitch puts before the percent
+    // sign in German and French, so the caption needs no cleaning first.
+    var clean = String(text || '');
+    // Turkish puts the sign in front of the number, most locales behind it.
+    var pct = clean.match(/(\d+(?:[.,]\d+)?)\s*%|%\s*(\d+(?:[.,]\d+)?)/);
+    if (!pct) return null;
+
+    var raw = pct[1] !== undefined ? pct[1] : pct[2];
+    var percent = Number(raw.replace(',', '.'));
+    if (!isFinite(percent) || percent < 0 || percent > 100) return null;
+
+    var rest = (clean.slice(0, pct.index) + ' ' +
+      clean.slice(pct.index + pct[0].length)).match(/\d+(?:[.,]\d+)?/g) || [];
+    var hours = rest.length ? Number(rest[0].replace(',', '.')) : 0;
+    if (!isFinite(hours) || hours <= 0) hours = 0;
+
+    return { percent: percent, hours: hours };
+  }
+
+  /**
+   * @param {!Element} caption
+   * @return {string} The drop's name, or '' when the layout hides it.
+   */
+  function progressName(caption) {
+    var node = caption;
+    for (var up = 0; up < NAME_LOOKUP_DEPTH && node; up++) {
+      node = node.parentElement;
+      if (!node) break;
+      var texts = Array.prototype.slice
+        .call(node.querySelectorAll('p, span, div, h1, h2, h3, h4, h5'))
+        .filter(function (n) { return !n.children.length; })
+        .map(function (n) { return (n.textContent || '').trim(); })
+        .filter(function (t) {
+          return t && t.indexOf('%') < 0 && t.length <= 40;
+        });
+      if (texts.length) return texts[0];
+    }
+    return '';
+  }
+
+  /**
+   * @return {!Array<!Object>} One entry per drop in progress.
+   */
+  function collectProgress() {
+    if (state.mode !== 'claim') return [];
+    var root = D.qAny(INVENTORY_ROOTS) || document.body;
+    var nodes = root.querySelectorAll('p, span, div');
+    var out = [];
+
+    for (var i = 0; i < nodes.length && out.length < MAX_PROGRESS_ITEMS; i++) {
+      var el = nodes[i];
+      if (el.children.length) continue;               // Leaf captions only.
+      var text = (el.textContent || '').trim();
+      if (!text || text.length > PROGRESS_TEXT_MAX || text.indexOf('%') < 0) continue;
+
+      var parsed = parseProgress(text);
+      if (!parsed) continue;
+      out.push({
+        name: progressName(el),
+        percent: parsed.percent,
+        hours: parsed.hours
+      });
+    }
+    return out;
+  }
+
+  /** Sends the current progress snapshot, if the page has one. */
+  function reportProgress() {
+    if (!state.running || state.mode !== 'claim') return;
+    var items = collectProgress();
+    if (!items.length) return;
+    g.ADT.send({ type: 'adt:drops-progress', items: items });
+  }
+
   var state = {
     running: false,
     mode: null,
     timer: null,
     freshTimer: null,
+    progressTimer: null,
     observer: null,
     cfg: null,
     clicked: null,
@@ -308,8 +414,12 @@
       state.observer = D.observe(document.body, claimAll, 700);
       state.timer = setInterval(claimAll, 8000);
       state.freshTimer = setInterval(refreshStaleView, FRESHNESS_TICK_MS);
+      state.progressTimer = setInterval(reportProgress, PROGRESS_TICK_MS);
       D.waitFor(INVENTORY_ROOTS, 20000).then(function () {
-        if (state.running) setTimeout(claimAll, 1500);
+        if (!state.running) return;
+        setTimeout(claimAll, 1500);
+        // The grid is up by now, so this is the first honest reading.
+        setTimeout(reportProgress, 2500);
       });
       log.debug('drops: claim mode (inventory)');
       return;

@@ -336,14 +336,60 @@
     });
   }
 
+  /** @const {string} Latest progress snapshot scraped off the inventory page. */
+  var PROGRESS_KEY = 'dropsProgress';
+
+  /** @const {number} */
+  var MAX_PROGRESS_ITEMS = 8;
+
+  /**
+   * Takes what the inventory page showed and keeps it until a newer reading
+   * arrives. The page is usually closed by the time the popup is opened, so a
+   * stored snapshot with a timestamp is the only way to answer "how much
+   * longer" at all.
+   *
+   * @param {*} items Untrusted: this comes from a content script.
+   * @return {!Promise<void>}
+   */
+  function storeProgress(items) {
+    if (!Array.isArray(items)) return Promise.resolve();
+
+    var clean = items.filter(function (item) {
+      return item && typeof item.percent === 'number' &&
+        isFinite(item.percent) && item.percent >= 0 && item.percent <= 100;
+    }).slice(0, MAX_PROGRESS_ITEMS).map(function (item) {
+      var hours = Number(item.hours);
+      return {
+        name: String(item.name || '').slice(0, 60),
+        percent: Math.round(item.percent * 10) / 10,
+        hours: isFinite(hours) && hours > 0 ? hours : 0
+      };
+    });
+    if (!clean.length) return Promise.resolve();
+
+    var out = {};
+    out[PROGRESS_KEY] = { items: clean, updatedAt: Date.now() };
+    return Promise.resolve(api.storage.local.set(out)).catch(function () {});
+  }
+
+  /** @return {!Promise<!Object>} */
+  function loadProgress() {
+    return Promise.resolve(api.storage.local.get(PROGRESS_KEY)).then(function (res) {
+      return (res && res[PROGRESS_KEY]) || {};
+    }).catch(function () {
+      return {};
+    });
+  }
+
   /** @return {!Promise<!Object>} */
   function activityStatus() {
     return Promise.all([
       loadActivity(),
       g.ADT.watchHealth.status(),
-      nextDropsCheckAt()
+      nextDropsCheckAt(),
+      loadProgress()
     ]).then(function (r) {
-      return { drops: r[0], watching: r[1], nextCheckAt: r[2] };
+      return { drops: r[0], watching: r[1], nextCheckAt: r[2], progress: r[3] };
     });
   }
 
@@ -620,6 +666,11 @@
 
       case 'adt:drops-check-now':
         runDropsCheck('popup').then(function () { sendResponse({ ok: true }); });
+        return true;
+
+      // Scraped off the inventory page by the content script.
+      case 'adt:drops-progress':
+        storeProgress(msg.items).then(function () { sendResponse({ ok: true }); });
         return true;
 
       // Raised by the content script when Twitch shows the unlock notification.

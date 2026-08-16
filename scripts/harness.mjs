@@ -546,6 +546,37 @@ console.log('\n[lifecycle harness]');
     activity.watching[0].channel === 'shroud');
   assert('and when the next check is due', activity.nextCheckAt === 1700000000000);
 }
+{
+  // Scraped values arrive from a content script, so the worker treats them as
+  // untrusted input rather than as its own data.
+  const h = swSandbox({}, {});
+
+  h.send({type: 'adt:drops-progress', items: [
+    {name: 'Rare 2', percent: 85, hours: 4},
+    {name: 'x'.repeat(200), percent: 12, hours: 6},
+    {name: 'broken', percent: 400, hours: 1},
+    {name: 'no requirement', percent: 30, hours: 0}
+  ]}, 5);
+  await h.settle();
+
+  const stored = h.storage.dropsProgress;
+  assert('a progress report is stored', !!stored && stored.items.length === 3);
+  assert('an impossible percentage is dropped',
+    !stored.items.some((i) => i.percent > 100));
+  assert('an overlong name is cut', stored.items[1].name.length === 60);
+  assert('a missing requirement survives as zero', stored.items[2].hours === 0);
+  assert('and the snapshot is timestamped', typeof stored.updatedAt === 'number');
+
+  h.send({type: 'adt:drops-progress', items: 'not an array'}, 5);
+  await h.settle();
+  assert('garbage does not overwrite a good snapshot',
+    h.storage.dropsProgress.items.length === 3);
+
+  const reply = h.send({type: 'adt:status'}, 5);
+  await h.settle();
+  assert('the popup gets the snapshot with the rest of the activity',
+    reply.response.activity.progress.items[0].name === 'Rare 2');
+}
 
 console.log(failures ? `\n${failures} harness failure(s).\n` : '\nLifecycle harness clean.\n');
 process.exit(failures ? 1 : 0);

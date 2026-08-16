@@ -67,6 +67,11 @@
   "durationMinutes": { "message": "$1분" },
   "durationHours": { "message": "$1시간 $2분" },
   "activityHintIdle": { "message": "지금 감시 중인 Twitch 탭이 없습니다. 채널을 열면 시작합니다." },
+  "cardDropProgress": { "message": "드롭 진행도" },
+  "dropRemaining": { "message": "$1 남음" },
+  "dropReady": { "message": "완료" },
+  "dropUnnamed": { "message": "드롭" },
+  "dropProgressEmpty": { "message": "아직 진행도를 읽지 않았습니다. 다음에 드롭 인벤토리 페이지가 열릴 때 가져옵니다." },
 
   "btnDropsNow": { "message": "드롭 지금 확인" },
   "btnDropsNowBusy": { "message": "확인 중…" },

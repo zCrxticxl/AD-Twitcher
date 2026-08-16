@@ -274,6 +274,63 @@
     $('acHint').textContent = watched.length ? '' : ADT.msg('activityHintIdle');
   }
 
+  /** @const {number} Rows in the progress card. More is a wall, not an answer. */
+  var PROGRESS_ROWS = 4;
+
+  /**
+   * How much longer each drop needs, closest first. The percentage comes from
+   * the inventory page; the remaining time is derived from it, so it is an
+   * estimate that assumes uninterrupted watching - which is exactly what the
+   * watchdog is there to keep true.
+   *
+   * @param {!Object} progress Stored snapshot: {items, updatedAt}.
+   */
+  function renderProgress(progress) {
+    var list = $('dpList');
+    var items = ((progress && progress.items) || []).slice();
+
+    while (list.firstChild) list.removeChild(list.firstChild);
+
+    items.sort(function (a, b) {
+      return remainingMs(a) - remainingMs(b);
+    });
+
+    items.slice(0, PROGRESS_ROWS).forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'kv';
+
+      var name = document.createElement('span');
+      name.textContent = item.name || ADT.msg('dropUnnamed');
+
+      var value = document.createElement('b');
+      var left = remainingMs(item);
+      value.textContent = ADT.formatNumber(Math.round(item.percent)) + ' % · ' +
+        (item.percent >= 100 || left <= 0
+          ? ADT.msg('dropReady')
+          : (item.hours
+            ? ADT.msg('dropRemaining', duration(left))
+            : EMPTY));
+
+      row.appendChild(name);
+      row.appendChild(value);
+      list.appendChild(row);
+    });
+
+    $('dpUpdated').textContent = progress && progress.updatedAt
+      ? ago(progress.updatedAt)
+      : '';
+    $('dpHint').textContent = items.length ? '' : ADT.msg('dropProgressEmpty');
+  }
+
+  /**
+   * @param {!Object} item
+   * @return {number} Milliseconds left, or 0 when the requirement is unknown.
+   */
+  function remainingMs(item) {
+    if (!item || !item.hours) return 0;
+    return Math.max(0, item.hours * 3600000 * (1 - (item.percent || 0) / 100));
+  }
+
   /** @param {!Object} live liveWatch.status() result. */
   function renderLive(live) {
     $('lwAge').textContent = ago(live.lastReportAt);
@@ -620,6 +677,7 @@
       if (res && res.ok) {
         renderLive(res.live);
         renderActivity(res.activity || {}, stats);
+        renderProgress((res.activity && res.activity.progress) || {});
       }
     });
 

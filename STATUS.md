@@ -68,6 +68,13 @@ live Twitch behavior still requires manual browser sessions.
     what was claimed last. The drops outcome is written to `activityRuntime` in
     `storage.local` on every check, including skipped and failed ones, so the
     record survives the service worker that produced it.
+17. Drop progress is read off the inventory page and shown as a remaining time,
+    closest drop first. The caption is localized and its word order is not, so
+    the parser takes the number carrying the percent sign as progress and the
+    other number as the requirement; Turkish writes the sign in front, which the
+    logic tests caught. Scraped values are validated and capped in the
+    background before they are stored, because they arrive from a content
+    script.
 
 ## 0.2.0
 

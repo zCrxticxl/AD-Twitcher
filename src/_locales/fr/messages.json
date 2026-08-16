@@ -67,6 +67,11 @@
   "durationMinutes": { "message": "$1 min" },
   "durationHours": { "message": "$1 h $2 min" },
   "activityHintIdle": { "message": "Aucun onglet Twitch n'est surveillé pour le moment. Ouvrez une chaîne pour commencer." },
+  "cardDropProgress": { "message": "Progression des drops" },
+  "dropRemaining": { "message": "encore $1" },
+  "dropReady": { "message": "prêt" },
+  "dropUnnamed": { "message": "Drop" },
+  "dropProgressEmpty": { "message": "Aucune progression lue pour l'instant. Elle est relevée sur la page d'inventaire des drops à sa prochaine ouverture." },
 
   "btnDropsNow": { "message": "Vérifier les drops" },
   "btnDropsNowBusy": { "message": "Vérification…" },

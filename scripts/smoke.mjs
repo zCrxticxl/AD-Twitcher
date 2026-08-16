@@ -281,6 +281,43 @@ function evalFragment(source, pattern, tail, context = {}) {
   eq('ignores unrelated chat text', NOTIFY_RX.test('someone dropped a nice clip'), false);
 }
 
+/* --------------------------------------- drops: progress caption per locale */
+{
+  const src = read('src/content/modules/drops.js');
+  const body = src.match(/function parseProgress[\s\S]*?\n {2}\}/)[0];
+  const parseProgress = vm.runInNewContext(
+    '(' + body.replace(/^function parseProgress/, 'function') + ')', {isFinite, Number, String});
+
+  console.log('\n[drop progress caption]');
+
+  // Word order differs per language, which is exactly why nothing here parses
+  // the sentence. Twitch writes a no-break space before % in several locales.
+  const captions = [
+    ['85% of 4 hours', 85, 4],
+    ['85 % von 4 Stunden', 85, 4],
+    ['48 % de 7 heures', 48, 7],
+    ['18% de 1 hora', 18, 1],
+    ['3 % di 6 ore', 3, 6],
+    ['6% z 3 godzin', 6, 3],
+    ['9 % от 2 часов', 9, 2],
+    ['12 saatin %1 kadarı', 1, 12],
+    ['4 時間中 85%', 85, 4],
+    ['5시간 중 68%', 68, 5],
+    ['9 小时中的 37%', 37, 9]
+  ];
+  captions.forEach(([text, percent, hours]) => {
+    const got = parseProgress(text);
+    eq('reads "' + text + '"', got && [got.percent, got.hours], [percent, hours]);
+  });
+
+  eq('a decimal comma is a decimal point', parseProgress('37,5 % von 9 Stunden').percent, 37.5);
+  eq('a caption without a requirement still yields the percentage',
+    parseProgress('100% complete'), {percent: 100, hours: 0});
+  eq('plain text is not progress', parseProgress('Legendary 2'), null);
+  eq('an empty caption is not progress', parseProgress(''), null);
+  eq('an impossible percentage is rejected', parseProgress('150 % von 4 Stunden'), null);
+}
+
 /* ------------------------------------------- ad-mute: stale marker handling */
 {
   const src = read('src/content/modules/ad-mute.js');
