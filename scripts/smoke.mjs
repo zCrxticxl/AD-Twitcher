@@ -315,7 +315,10 @@ function evalFragment(source, pattern, tail, context = {}) {
     parseProgress('100% complete'), {percent: 100, hours: 0});
   eq('plain text is not progress', parseProgress('Legendary 2'), null);
   eq('an empty caption is not progress', parseProgress(''), null);
-  eq('an impossible percentage is rejected', parseProgress('150 % von 4 Stunden'), null);
+  // Twitch counts past the requirement and prints the raw figure, so a value
+  // above 100 is earned progress, not a corrupt caption.
+  eq('progress beyond the requirement is capped, not discarded',
+    parseProgress('470 % von 1 Stunde'), {percent: 100, hours: 1});
 }
 
 /* ------------------------------- drops: progress read off the real inventory */
@@ -365,6 +368,11 @@ function evalFragment(source, pattern, tail, context = {}) {
             return (!sub[1] || this.tagName.toLowerCase() === sub[1]) &&
               String(this.attrs.class || '').includes(sub[2]);
           }
+          const attr = w.match(/^([a-z]*)\[([a-z-]+)\]$/);
+          if (attr) {
+            return (!attr[1] || this.tagName.toLowerCase() === attr[1]) &&
+              Object.prototype.hasOwnProperty.call(this.attrs, attr[2]);
+          }
           return false;
         });
       },
@@ -411,11 +419,21 @@ function evalFragment(source, pattern, tail, context = {}) {
     ])
   ]);
 
-  // Title, end date, then the tower that holds this campaign's cards.
-  const campaign = (title, cards) => el('DIV', {}, [
+  // Title, end date, then the tower that holds this campaign's cards. A live
+  // campaign also links to the channels where it can be earned; one that has
+  // ended keeps only its outward "about this drop" link, and that difference is
+  // what separates them without parsing a localized date.
+  const campaign = (title, cards, over) => el('DIV', {}, [
     el('DIV', {}, [
       el('P', {}, [title]),
-      el('P', {}, ['Ende: Mo., 24. Aug., 15:00 MESZ'])
+      el('P', {}, ['Ende: Mo., 24. Aug., 15:00 MESZ']),
+      over
+        ? el('A', {attrs: {href: 'https://example.invalid/drops'}}, ['Über diesen Drop'])
+        : el('DIV', {}, [
+          el('A', {attrs: {href: '/directory/category/kord-breach'}},
+            ['teilnehmenden Live-Kanal']),
+          el('A', {attrs: {href: 'https://example.invalid/drops'}}, ['Über diesen Drop'])
+        ])
     ]),
     // The generated hash in front is exactly why nothing may match on it.
     el('DIV', {}, [
@@ -429,7 +447,7 @@ function evalFragment(source, pattern, tail, context = {}) {
     campaign('KORD BREACH S1 Drops', [
       card('Common 1', 10, 'von 1 Stunde', true),
       card('Rare 1', 5, 'von 2 Stunden', true)
-    ]),
+    ], true),
     // Same title as the campaign above, which is why one alone is no identity:
     // a finished drop, the same tier listed twice, and one still running.
     campaign('KORD BREACH S1 Drops', [
@@ -437,12 +455,12 @@ function evalFragment(source, pattern, tail, context = {}) {
       card('Common 1', 40, 'von 1 Stunde', false),
       card('Common 1', 55, 'von 1 Stunde', false),
       card('Rare 2', 94, 'von 4 Stunden', false)
-    ]),
+    ], false),
     campaign('EWC 2026', [
       card('EWC 2026 (Bronze)', 18, 'von 1 Stunde', false),
       card('EWC 2026 (Diamond)', 1, 'von 12 Stunden', false),
       card('Rare 2', 93, 'von 4 Stunden', false)
-    ]),
+    ], false),
     // The "Abgeholt" section: rewards already collected. Full bar, but a date
     // where a progress caption would be, so there is nothing to report.
     campaign('Abgeholt', [
@@ -454,7 +472,7 @@ function evalFragment(source, pattern, tail, context = {}) {
           el('DIV', {}, [el('P', {}, ['vor 2 Stunden'])])
         ])
       ])
-    ])
+    ], false)
   ]);
 
   const body = src.match(
