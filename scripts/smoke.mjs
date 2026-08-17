@@ -321,6 +321,49 @@ function evalFragment(source, pattern, tail, context = {}) {
     parseProgress('470 % von 1 Stunde'), {percent: 100, hours: 1});
 }
 
+/* ------------------------------------------ drops: progress bar reading */
+{
+  /*
+   * The percentage is preferably read straight off Twitch's own ARIA bar
+   * rather than parsed from a localized caption. `Number(null)` and
+   * `Number('')` are both 0, and 0 is a legitimate reading for a drop that
+   * just started, so the guard against "no value at all" has to run before
+   * the conversion - this is exactly that guard, exercised directly rather
+   * than only through the full collectProgress DOM walk below.
+   */
+  const src = read('src/content/modules/drops.js');
+  const body = src.match(/function barPercent[\s\S]*?\n {2}\}/)[0];
+  const barPercent = vm.runInNewContext(
+    '(' + body.replace(/^function barPercent/, 'function') + ')',
+    {isFinite, Number, String, Math});
+
+  const bar = (valuenow, valuemax) => ({
+    getAttribute(name) {
+      if (name === 'aria-valuenow') return valuenow;
+      if (name === 'aria-valuemax') return valuemax;
+      return null;
+    }
+  });
+
+  console.log('\n[drop progress bar reading]');
+  eq('a value is read as-is when max is 100', barPercent(bar('85', '100')), 85);
+  eq('a missing max defaults to 100', barPercent(bar('85', null)), 85);
+  eq('a non-100 max is read as a ratio', barPercent(bar('3', '4')), 75);
+  eq('a zero max cannot divide by zero and falls back to a plain percentage',
+    barPercent(bar('50', '0')), 50);
+  eq('zero is a real reading, not "no value"', barPercent(bar('0', '100')), 0);
+  eq('a missing aria-valuenow hands the question back to the caption, not to 0',
+    barPercent(bar(null, '100')), null);
+  eq('a blank aria-valuenow does the same',
+    barPercent(bar('', '100')), null);
+  eq('a non-numeric aria-valuenow does the same',
+    barPercent(bar('NaN', '100')), null);
+  eq('a value above the bar\'s own max is clamped to 100',
+    barPercent(bar('150', '100')), 100);
+  eq('a negative value is clamped to zero, not sent negative',
+    barPercent(bar('-5', '100')), 0);
+}
+
 /* ------------------------------- drops: progress read off the real inventory */
 {
   /*
@@ -581,6 +624,48 @@ function evalFragment(source, pattern, tail, context = {}) {
   eq('a bar with no aria value falls back to the caption instead of reading 0',
     noAria.items.map((x) => x.percent), [85]);
   eq('and still carries its requirement', noAria.items.map((x) => x.hours), [4]);
+
+  // A real ARIA progress bar Twitch has not finished populating yet: the
+  // attribute is there, but empty, rather than absent outright. The same
+  // "hand it back to the caption" guard has to cover this case too, or a
+  // drop already at 85 % would flash to 0 % while the bar is mid-render.
+  const blankAria = (name, caption) => el('DIV', {}, [
+    el('DIV', {}, [el('DIV', {}, [el('P', {}, [name])])]),
+    el('DIV', {}, [
+      el('DIV', {attrs: {role: 'progressbar', 'aria-valuenow': '',
+        'aria-valuemin': '0', 'aria-valuemax': '100'}}),
+      el('DIV', {}, [el('P', {}, [caption])])
+    ])
+  ]);
+  const blank = collectFrom(el('DIV', {}, [
+    campaign('EWC 2026', [blankAria('Rare 4', '85 % von 4 Stunden')], false)
+  ]));
+  eq('a blank aria-valuenow does not regress a real 85 % to 0',
+    blank.items.map((x) => x.percent), [85]);
+
+  /*
+   * campaignIsOver() is an inference from markup (no channel/directory link
+   * means the campaign ended), not a stated fact the way the retirement
+   * notice is - a campaign could in principle carry only external links (a
+   * sponsor page, "about this drop") and still be running. Nothing here can
+   * tell those apart, so the code accepts that risk deliberately rather than
+   * add a more specific link check that a future redesign could dodge. What
+   * it guarantees instead is the shape of the fallback: the heuristic can
+   * empty a campaign out of the list next to others that are still visibly
+   * live, but it can never blank the whole page by itself.
+   */
+  const onlyGoneByLinks = collectFrom(el('DIV', {}, [
+    campaign('Sponsor Only Drops', [card('Solo', 40, 'von 2 Stunden', false)], true)
+  ]));
+  eq('a campaign gone only by the link heuristic is not dropped when it is all there is',
+    onlyGoneByLinks.items.map((x) => x.name), ['Solo']);
+
+  const goneAmongLive = collectFrom(el('DIV', {}, [
+    campaign('Sponsor Only Drops', [card('Solo', 40, 'von 2 Stunden', false)], true),
+    campaign('EWC 2026', [card('Rare 2', 93, 'von 4 Stunden', false)], false)
+  ]));
+  eq('but the same campaign is dropped once a genuinely live one is on the page',
+    goneAmongLive.items.map((x) => x.name), ['Rare 2']);
 }
 
 /* ------------------------------------------- ad-mute: stale marker handling */
