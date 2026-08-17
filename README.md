@@ -45,12 +45,26 @@ percentage is read as a number instead of out of localized text. The caption
 next to it supplies the requirement, and the two together give a remaining time.
 Every drop is listed with its campaign, because "Common 1" identifies nothing on
 its own - two campaigns can even run under the same title with the same reward
-tiers. Campaigns that have ended keep their progress bars, so cards whose reward
-image Twitch has dimmed are left out, as are drops already at 100 %, which have
-no remaining time to report. The dimmed-image filter never empties the list.
-Ranking happens over the whole page before it is cut down: the inventory shows
-campaign after campaign, and the drop that is nearly finished is rarely in the
-first one.
+tiers. Drops already at 100 % are shown as markers rather than rows, since they
+have no remaining time to report. Ranking happens over the whole page before it
+is cut down: the inventory shows campaign after campaign, and the drop that is
+nearly finished is rarely in the first one.
+
+**What is still earnable.** A closed campaign keeps its cards and its progress
+bars, so an inventory that has collected months of them will happily list drops
+nobody can finish. Two things separate the live ones. A running campaign links
+to the channels where it can be earned, while a finished one keeps nothing but
+its outward "about this drop" link - that reads the same in every language,
+unlike "Ende: So., 16. Aug., 14:59 MESZ". And Twitch says it outright on a
+reward that has retired: "Diese Belohnung ist nicht mehr verfügbar." The notice
+is about the campaign, not about the one card it appears on, so it retires the
+whole row with it.
+
+The two are not treated alike. The link test is an inference about markup and
+can never empty the list on its own, because a Twitch redesign could make it
+match everything. The notice is taken at face value: when every campaign on the
+page carries it, no drops in progress is the correct answer, and the popup says
+so instead of keeping the last list it saw.
 
 For the requirement the caption still has to be read, and its word order is not
 fixed: German writes "85 % von 4 Stunden", Japanese "4 時間中 85%", Turkish puts

@@ -38,6 +38,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('content/modules/ad-mute.js')) return;
+
   g.ADT = g.ADT || {};
   g.ADT.modules = g.ADT.modules || {};
   var D = g.ADT.dom;
@@ -273,11 +276,19 @@
       log.warn('Player still stalled after ad; recovery reload suppressed by cooldown');
       return;
     }
+    /*
+     * The cooldown is the only thing standing between this and a reload loop,
+     * and it lives in sessionStorage because the reload wipes everything else.
+     * If it cannot be written it cannot be read back either, so the next page
+     * would find no record, find the player still stalled, and reload again.
+     * Recovery is worth having; a tab that reloads forever is not.
+     */
     try {
       window.sessionStorage.setItem(RECOVERY_RELOAD_KEY, String(now));
     } catch (e) {
-      // Reload is still safe. The one-shot in-memory timer prevents duplicates
-      // until navigation begins.
+      log.warn('Player did not recover after ad, but the reload cooldown ' +
+        'cannot be stored; leaving the page alone rather than risking a loop');
+      return;
     }
     log.warn('Player did not recover after ad; reloading Twitch once');
     location.reload();

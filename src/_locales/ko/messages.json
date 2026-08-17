@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "드롭" },
   "dropProgressDone": { "message": "완료" },
   "dropProgressEmpty": { "message": "아직 진행도를 읽지 않았습니다. 다음에 드롭 인벤토리 페이지가 열릴 때 가져옵니다." },
+  "dropProgressNone": { "message": "진행 중인 드롭이 없습니다. 인벤토리의 모든 캠페인이 종료되었거나 이미 수령했습니다." },
 
   "btnDropsNow": { "message": "드롭 지금 확인" },
   "btnDropsNowBusy": { "message": "확인 중…" },

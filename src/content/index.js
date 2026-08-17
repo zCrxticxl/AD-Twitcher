@@ -14,6 +14,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('content/index.js')) return;
+
   g.ADT = g.ADT || {};
   var api = g.ADT.api;
   var log = g.ADT.log;
@@ -147,6 +150,7 @@
 
   g.ADT.settings.onChange(apply);
 
+  var refreshTimer = null;
   try {
     D.onRouteChange(function (path) {
       log.debug('route -> ' + path);
@@ -160,7 +164,8 @@
       current = {};
       lastSig = null;                       // Re-apply after a page change.
       if (D.resetClickBudget) D.resetClickBudget();
-      setTimeout(refresh, 1200);
+      if (refreshTimer) clearTimeout(refreshTimer);
+      refreshTimer = setTimeout(refresh, 1200);
     });
   } catch (e) {
     log.warn('Route observation unavailable: ' + (e && e.message));

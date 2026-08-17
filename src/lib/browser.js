@@ -14,6 +14,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : self;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('lib/browser.js')) return;
+
   g.ADT = g.ADT || {};
 
   var hasBrowser = typeof g.browser !== 'undefined' && g.browser && g.browser.runtime;

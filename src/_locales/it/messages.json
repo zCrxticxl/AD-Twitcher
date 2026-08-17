@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "Drop" },
   "dropProgressDone": { "message": "Completati" },
   "dropProgressEmpty": { "message": "Nessun avanzamento letto finora. Viene preso dalla pagina inventario drops alla prossima apertura." },
+  "dropProgressNone": { "message": "Nessun drop in corso. Tutte le campagne nell'inventario sono terminate o già riscattate." },
 
   "btnDropsNow": { "message": "Controlla i drop ora" },
   "btnDropsNowBusy": { "message": "Controllo…" },

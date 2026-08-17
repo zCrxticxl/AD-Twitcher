@@ -23,6 +23,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('content/modules/drops.js')) return;
+
   g.ADT = g.ADT || {};
   g.ADT.modules = g.ADT.modules || {};
   var D = g.ADT.dom;
@@ -213,6 +216,42 @@
    */
   var PROGRESS_BAR_SELECTORS = ['[role="progressbar"]', '.tw-progress-bar'];
 
+  /*
+   * Twitch does not leave this one to inference. A reward that can no longer be
+   * earned says so in a sentence - "Diese Belohnung ist nicht mehr verfügbar."
+   * - and the notice is never printed on a single tier on its own: a campaign
+   * retires as a whole, so wherever the sentence appears, the entire row it
+   * belongs to is either closed or already collected.
+   *
+   * Only the negated wording is listed here. The bare word for "available" is a
+   * positive signal a few lines up in `UNLOCK_WORD`, and matching it here would
+   * flag every running drop on the page. Fragments are used rather than whole
+   * sentences, and apostrophes are avoided, because Twitch writes the French
+   * elision with a typographic quote that no straight one matches.
+   *
+   * @const {!Object<string, !Array<string>>} Lowercased; so is the haystack.
+   */
+  var UNAVAILABLE_TEXTS_BY_LOCALE = {
+    en: ['no longer available'],
+    de: ['nicht mehr verfügbar', 'nicht mehr verfuegbar'],
+    es: ['ya no está disponible', 'ya no esta disponible'],
+    fr: ['n\'est plus disponible', 'n’est plus disponible', 'nest plus disponible'],
+    it: ['non è più disponibile', 'non e più disponibile', 'non e piu disponibile'],
+    pt_BR: ['não está mais disponível', 'nao esta mais disponivel'],
+    pl: ['nie jest już dostępn', 'nie jest juz dostepn', 'niedostępn'],
+    ru: ['больше недоступ', 'больше не доступ'],
+    tr: ['artık kullanılam', 'artik kullanilam', 'artık mevcut değil'],
+    ja: ['利用できなく'],
+    ko: ['더 이상 사용할 수 없'],
+    zh_CN: ['不再可用', '已不可用']
+  };
+
+  /** @const {!Array<string>} */
+  var UNAVAILABLE_TEXTS = Object.keys(UNAVAILABLE_TEXTS_BY_LOCALE)
+    .reduce(function (all, locale) {
+      return all.concat(UNAVAILABLE_TEXTS_BY_LOCALE[locale]);
+    }, []);
+
   /** @const {number} Ancestors searched for the caption next to a bar. */
   var CAPTION_LOOKUP_DEPTH = 2;
 
@@ -267,7 +306,17 @@
    * @return {?number} 0..100, or null when the bar carries no value.
    */
   function barPercent(bar) {
-    var now = Number(bar.getAttribute('aria-valuenow'));
+    /*
+     * The attribute has to be checked for being there before it is converted.
+     * Number(null) and Number('') are both 0, and 0 is a valid reading, so a
+     * bar carrying no value would report a drop at 0 % instead of handing the
+     * question back to the caption. That is exactly the case the
+     * `.tw-progress-bar` fallback selector exists for: those are the bars that
+     * are not ARIA progress bars and have no aria-valuenow at all.
+     */
+    var raw = bar.getAttribute('aria-valuenow');
+    if (raw === null || String(raw).trim() === '') return null;
+    var now = Number(raw);
     if (!isFinite(now)) return null;
     var max = Number(bar.getAttribute('aria-valuemax'));
     if (!isFinite(max) || max <= 0) max = 100;
@@ -344,12 +393,20 @@
 
   /**
    * @param {!Element} bar
+   * @return {?Element} The campaign block: its title, its end date and the row
+   *     of cards. One block is one campaign.
+   */
+  function campaignBlock(bar) {
+    var row = towerOf(bar);
+    return (row && row.parentElement && row.parentElement.parentElement) || null;
+  }
+
+  /**
+   * @param {!Element} bar
    * @return {string} The campaign this drop belongs to, '' when not found.
    */
   function campaignName(bar) {
-    var row = towerOf(bar);
-    // The campaign block holds its title, its end date and the row of cards.
-    var block = row && row.parentElement && row.parentElement.parentElement;
+    var block = campaignBlock(bar);
     if (!block) return '';
 
     var nodes = block.querySelectorAll('p, span, h1, h2, h3, h4, h5');
@@ -371,8 +428,7 @@
    * @return {boolean} True when nothing on this campaign can progress any more.
    */
   function campaignIsOver(bar) {
-    var row = towerOf(bar);
-    var block = row && row.parentElement && row.parentElement.parentElement;
+    var block = campaignBlock(bar);
     if (!block || typeof block.querySelectorAll !== 'function') return false;
 
     var links = block.querySelectorAll('a[href]');
@@ -383,11 +439,50 @@
     return true;
   }
 
+  /*
+   * One campaign block is read once per scan rather than once per bar. An
+   * inventory holds every campaign of the last months and each of them a
+   * handful of bars, and reading a block means walking its whole subtree. The
+   * cache is cleared when a scan starts, so a re-rendered page is never
+   * answered out of the previous one.
+   */
+  var retiredBlocks = [];
+  var retiredAnswers = [];
+
   /**
-   * @return {!Array<!Object>} One entry per drop in progress.
+   * @param {!Element} bar
+   * @return {boolean} True when Twitch states in words that this row can no
+   *     longer be earned - closed, or already collected.
+   */
+  function campaignIsRetired(bar) {
+    var block = campaignBlock(bar);
+    if (!block) return false;
+
+    var at = retiredBlocks.indexOf(block);
+    if (at >= 0) return retiredAnswers[at];
+
+    var text = String(block.textContent || '').toLowerCase();
+    var retired = false;
+    for (var i = 0; i < UNAVAILABLE_TEXTS.length && !retired; i++) {
+      if (text.indexOf(UNAVAILABLE_TEXTS[i]) >= 0) retired = true;
+    }
+
+    retiredBlocks.push(block);
+    retiredAnswers.push(retired);
+    return retired;
+  }
+
+  /**
+   * @return {{items: !Array<!Object>, read: boolean}} One entry per drop in
+   *     progress, and whether the inventory was actually read. The two are not
+   *     the same answer: no items with `read` set means every campaign on the
+   *     page has retired, while no items without it means the scan found
+   *     nothing to go on and the last known snapshot is still the better one.
    */
   function collectProgress() {
-    if (state.mode !== 'claim') return [];
+    if (state.mode !== 'claim') return { items: [], read: false };
+    retiredBlocks.length = 0;
+    retiredAnswers.length = 0;
     var root = D.qAny(INVENTORY_ROOTS) || document.body;
     var bars = root.querySelectorAll(PROGRESS_BAR_SELECTORS.join(','));
     var out = [];
@@ -423,39 +518,59 @@
         campaign: campaignName(bar),
         percent: percent,
         hours: parsed ? parsed.hours : 0,
+        retired: campaignIsRetired(bar),
         gone: campaignIsOver(bar)
       });
     }
 
     /*
-     * Drop the expired campaigns, but never all of them: if Twitch renames the
-     * class this reads, an empty card would be a worse answer than a slightly
-     * too long list.
+     * Two kinds of "over", and they must not share one safety net.
+     *
+     * The notice is Twitch saying it in words, so it is taken at face value: if
+     * every campaign on the page carries it, then nothing is earnable and an
+     * empty list is the honest answer, not a broken scan. A text matcher fails
+     * by going quiet when the wording changes, which leaves the list too long -
+     * the same as before this filter existed, and the harmless direction.
+     *
+     * The link heuristic is an inference about markup and fails the other way,
+     * so it keeps its net: a redesign that makes it match everything must not
+     * be able to blank the card.
      */
-    var live = out.filter(function (item) { return !item.gone; });
-    if (!live.length) live = out;
+    var earnable = out.filter(function (item) { return !item.retired; });
+    var live = earnable.filter(function (item) { return !item.gone; });
+    if (!live.length) live = earnable;
 
     /*
      * Finished drops stay in. The popup shows them as small markers next to the
      * running ones rather than as rows, so filtering them out here would only
      * take away information the display can present cheaply.
      */
-    return live.map(function (item) {
-      return {
-        name: item.name,
-        campaign: item.campaign,
-        percent: item.percent,
-        hours: item.hours
-      };
-    });
+    return {
+      read: out.length > 0,
+      items: live.map(function (item) {
+        return {
+          name: item.name,
+          campaign: item.campaign,
+          percent: item.percent,
+          hours: item.hours
+        };
+      })
+    };
   }
 
-  /** Sends the current progress snapshot, if the page has one. */
+  /** Sends the current progress snapshot, if the page yielded one. */
   function reportProgress() {
     if (!state.running || state.mode !== 'claim') return;
-    var items = collectProgress();
-    if (!items.length) return;
-    g.ADT.send({ type: 'adt:drops-progress', items: items });
+    var scan = collectProgress();
+    /*
+     * An empty list is worth sending only when the inventory was read and
+     * nothing on it can still be earned - otherwise the popup would keep
+     * showing drops from a campaign that closed weeks ago, because a snapshot
+     * is only ever replaced, never expired. A scan that found nothing at all
+     * says nothing about the drops and must leave the stored one alone.
+     */
+    if (!scan.read) return;
+    g.ADT.send({ type: 'adt:drops-progress', items: scan.items, read: true });
   }
 
   var state = {
@@ -617,6 +732,16 @@
     if (state.freshTimer) {
       clearInterval(state.freshTimer);
       state.freshTimer = null;
+    }
+    /*
+     * Twitch is a single-page app, so a channel switch stops and restarts every
+     * module. An interval left behind here therefore accumulated one copy per
+     * navigation, and each one started reporting again the moment the module
+     * came back - the same snapshot sent N times every two minutes.
+     */
+    if (state.progressTimer) {
+      clearInterval(state.progressTimer);
+      state.progressTimer = null;
     }
     if (state.observer) {
       state.observer.disconnect();

@@ -400,6 +400,9 @@ function evalFragment(source, pattern, tail, context = {}) {
 
   // <p><span>10</span>&nbsp;% von 1 Stunde</p>, no-break space included: the
   // parser must not need to clean it, because s already covers it.
+  // `gone` prints the notice Twitch puts on a reward that can no longer be
+  // earned. It is a statement about the whole campaign, not about the one card
+  // it happens to sit on, which is what the row-wide filter has to reproduce.
   const card = (name, valuenow, requirement, gone) => el('DIV', {}, [
     el('DIV', {}, [
       el('DIV', {}, [el('IMG', {attrs: {class: gone
@@ -461,6 +464,14 @@ function evalFragment(source, pattern, tail, context = {}) {
       card('EWC 2026 (Diamond)', 1, 'von 12 Stunden', false),
       card('Rare 2', 93, 'von 4 Stunden', false)
     ], false),
+    // The case the link heuristic cannot see: this campaign still links to its
+    // channels, so by markup it looks live, and only the notice says otherwise.
+    // The notice sits on one card of the row; both have to go, because a
+    // campaign does not retire a single tier and leave the rest earnable.
+    campaign('RETIRED S2 Drops', [
+      card('Common 9', 62, 'von 2 Stunden', true),
+      card('Rare 9', 30, 'von 5 Stunden', false)
+    ], false),
     // The "Abgeholt" section: rewards already collected. Full bar, but a date
     // where a progress caption would be, so there is nothing to report.
     campaign('Abgeholt', [
@@ -477,24 +488,27 @@ function evalFragment(source, pattern, tail, context = {}) {
 
   const body = src.match(
     /var PROGRESS_BAR_SELECTORS[\s\S]*?function collectProgress[\s\S]*?\n {2}\}/)[0];
-  const collect = vm.runInNewContext(
+  const parseProgress = vm.runInNewContext(
+    '(' + src.match(/function parseProgress[\s\S]*?\n {2}\}/)[0]
+      .replace(/^function parseProgress/, 'function') + ')',
+    {isFinite, Number, String});
+
+  const collectFrom = (root) => vm.runInNewContext(
     body + '\ncollectProgress;',
     {
       isFinite, Number, String, Math, Array, Object,
       state: {mode: 'claim'},
-      document: {body: inventory},
+      document: {body: root},
       INVENTORY_ROOTS: [],
-      D: {qAny: () => inventory},
-      parseProgress: vm.runInNewContext(
-        '(' + src.match(/function parseProgress[\s\S]*?\n {2}\}/)[0]
-          .replace(/^function parseProgress/, 'function') + ')',
-        {isFinite, Number, String}),
+      D: {qAny: () => root},
+      parseProgress,
       PROGRESS_TEXT_MAX: 60,
       MAX_SCANNED_BARS: 60
-    });
+    })();
 
   console.log('\n[drop progress on the real inventory markup]');
-  const got = collect();
+  const scan = collectFrom(inventory);
+  const got = scan.items;
   eq('the expired campaign is left out, everything running is kept',
     got.length, 7);
   eq('the percentage comes from the progress bar',
@@ -513,6 +527,60 @@ function evalFragment(source, pattern, tail, context = {}) {
     got.filter((g) => g.name === 'Rare 2').length, 2);
   eq('a collected reward has a bar but no caption, and is not progress',
     got.some((g) => g.name === '1000000 RUB'), false);
+
+  eq('a campaign that says it is no longer available is dropped, links or not',
+    got.some((g) => g.campaign === 'RETIRED S2 Drops'), false);
+  eq('and the notice on one card retires the whole row with it',
+    got.some((g) => g.name === 'Rare 9'), false);
+  eq('a page with bars on it counts as read',
+    scan.read, true);
+
+  /*
+   * Every campaign closed. An empty list is the honest answer here, and it has
+   * to be marked as read: the stored snapshot is only ever replaced, never
+   * expired, so without this the popup keeps showing drops from a campaign that
+   * ended weeks ago. This is the one case the "never filter everything" net
+   * must not catch, which is why the notice does not share it.
+   */
+  const emptied = collectFrom(el('DIV', {}, [
+    campaign('KORD BREACH S1 Drops', [
+      card('Common 1', 10, 'von 1 Stunde', true)
+    ], false),
+    campaign('EWC 2026', [
+      card('Rare 2', 93, 'von 4 Stunden', true)
+    ], false)
+  ]));
+  eq('an inventory with nothing earnable left reports no drops',
+    emptied.items.length, 0);
+  eq('and reports that it read the page, so the stale list can be replaced',
+    emptied.read, true);
+
+  // The opposite case, and the reason the flag exists at all: a page that was
+  // not read must leave the stored snapshot alone rather than blank it.
+  const unread = collectFrom(el('DIV', {}, []));
+  eq('a page without a single bar is not a reading', unread.read, false);
+  eq('and reports nothing', unread.items.length, 0);
+
+  /*
+   * `.tw-progress-bar` is the second selector for a reason: it catches the
+   * bars that are not ARIA progress bars and therefore carry no aria-valuenow.
+   * Number(null) is 0 and 0 is a legal percentage, so reading the attribute
+   * without checking it is there first reported every one of those drops as
+   * sitting at 0 %, and the caption - which does know - was never consulted.
+   */
+  const plainBar = (name, caption) => el('DIV', {}, [
+    el('DIV', {}, [el('DIV', {}, [el('P', {}, [name])])]),
+    el('DIV', {}, [
+      el('DIV', {attrs: {class: 'tw-progress-bar'}}),
+      el('DIV', {}, [el('P', {}, [caption])])
+    ])
+  ]);
+  const noAria = collectFrom(el('DIV', {}, [
+    campaign('EWC 2026', [plainBar('Rare 3', '85 % von 4 Stunden')], false)
+  ]));
+  eq('a bar with no aria value falls back to the caption instead of reading 0',
+    noAria.items.map((x) => x.percent), [85]);
+  eq('and still carries its requirement', noAria.items.map((x) => x.hours), [4]);
 }
 
 /* ------------------------------------------- ad-mute: stale marker handling */
@@ -575,6 +643,62 @@ function evalFragment(source, pattern, tail, context = {}) {
       catalog.btnRefresh.message === base.btnRefresh.message;
   });
   eq('no locale is a copy of English', untranslated, []);
+}
+
+/* ----------------------------------------- stats: counters survive bad input */
+{
+  /*
+   * The whole storage layer is run here rather than a lifted function, because
+   * what is being checked is the read-modify-write itself: `by` arrives from a
+   * content script over a message, and a string turns the addition into a
+   * concatenation. That is not a one-off wrong number - "01" is then the value
+   * every later bump appends to, so a single bad message corrupts the counter
+   * for the rest of its life.
+   */
+  const data = {};
+  const api = {
+    storage: {
+      local: {
+        get: (key) => Promise.resolve({ [key]: data[key] }),
+        set: (patch) => { Object.assign(data, patch); return Promise.resolve(); }
+      },
+      onChanged: { addListener() {} }
+    }
+  };
+  const sandbox = {
+    globalThis: null, self: null, console, Promise, Object, Array, Date, Number,
+    String, isFinite, JSON, Math,
+    ADT: { api, isBackgroundPage: true }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.self = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(read('src/lib/storage.js'), sandbox);
+  const stats = sandbox.ADT.settings;
+
+  console.log('\n[stat counters]');
+  await stats.bumpStat('dropsClaimed', 2);
+  eq('a number increments', data.stats.dropsClaimed, 2);
+
+  // A numeric string still means what it says, so it is read as the number
+  // rather than rejected. What must not survive is the concatenation.
+  await stats.bumpStat('dropsClaimed', '7');
+  eq('a numeric string does not concatenate',
+    typeof data.stats.dropsClaimed, 'number');
+  eq('and counts as its value', data.stats.dropsClaimed, 9);
+
+  await stats.bumpStat('dropsClaimed', 'nonsense');
+  eq('an unreadable increment falls back to a single step',
+    data.stats.dropsClaimed, 10);
+
+  await stats.bumpStat('dropsClaimed', -5);
+  eq('a negative increment cannot walk a counter backwards',
+    data.stats.dropsClaimed, 11);
+
+  // A counter already corrupted by an older build must not stay poisoned.
+  data.stats.adsMuted = 'nonsense';
+  await stats.bumpStat('adsMuted');
+  eq('a corrupted counter recovers to a number', data.stats.adsMuted, 1);
 }
 
 console.log(`\n${pass} ok, ${fail} fail\n`);

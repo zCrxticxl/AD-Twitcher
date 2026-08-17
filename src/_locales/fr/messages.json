@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "Drop" },
   "dropProgressDone": { "message": "Terminés" },
   "dropProgressEmpty": { "message": "Aucune progression lue pour l'instant. Elle est relevée sur la page d'inventaire des drops à sa prochaine ouverture." },
+  "dropProgressNone": { "message": "Aucun drop en cours. Toutes les campagnes de l'inventaire sont terminées ou déjà récupérées." },
 
   "btnDropsNow": { "message": "Vérifier les drops" },
   "btnDropsNowBusy": { "message": "Vérification…" },

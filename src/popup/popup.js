@@ -35,6 +35,9 @@
   /** @type {?number} */
   var pollTimer = null;
 
+  /** @type {?number} */
+  var watchlistTimer = null;
+
   /**
    * Must mirror content_scripts[0].js in both manifests. scripts/check.mjs
    * fails the build if the two drift apart.
@@ -156,18 +159,31 @@
 
   /* ----------------------------------------------------------- rendering */
 
-  /** @param {!Object} s Settings. */
+  /**
+   * The whole popup re-renders every three seconds. A control the user is
+   * typing in must be left alone during that: what they typed is normalized on
+   * the way into storage - lowercased, trimmed, a pasted channel URL reduced to
+   * the login - so writing the stored value back mid-edit rewrites the text
+   * under the caret and sends the caret to the end of the field.
+   *
+   * @param {!Object} s Settings.
+   */
   function renderSettings(s) {
+    var editing = document.activeElement;
+
     $('masterToggle').checked = !!s.enabled;
     $('statusDot').classList.toggle('is-on', !!s.enabled);
 
     $$('[data-set]').forEach(function (el) {
+      if (el === editing) return;
       var v = getPath(s, el.dataset.set);
       if (el.type === 'checkbox') el.checked = !!v;
       else el.value = v == null ? '' : v;
     });
 
-    $('watchlist').value = (s.autoJoin.channels || []).join('\n');
+    if ($('watchlist') !== editing && !watchlistTimer) {
+      $('watchlist').value = (s.autoJoin.channels || []).join('\n');
+    }
   }
 
   /**
@@ -373,7 +389,7 @@
     var seen = {};
     var done = items.filter(function (item) {
       if (item.percent < 100) return false;
-      var key = item.campaign + ' ' + item.name;
+      var key = item.campaign + '\u0000' + item.name;
       if (seen[key]) return false;
       seen[key] = true;
       return true;
@@ -383,7 +399,18 @@
     $('dpUpdated').textContent = progress && progress.updatedAt
       ? ago(progress.updatedAt)
       : '';
-    $('dpHint').textContent = items.length ? '' : ADT.msg('dropProgressEmpty');
+    /*
+     * Two different empty states, and saying the wrong one is worse than
+     * saying nothing. A snapshot with a timestamp means the inventory was
+     * read and every campaign on it has closed or been collected; without
+     * one, no inventory page has been open yet and there is nothing to
+     * report either way.
+     */
+    $('dpHint').textContent = items.length
+      ? ''
+      : ADT.msg(progress && progress.updatedAt
+        ? 'dropProgressNone'
+        : 'dropProgressEmpty');
   }
 
   /**
@@ -391,9 +418,13 @@
    * @return {number} Milliseconds left, or 0 when the requirement is unknown.
    */
   function remainingMs(item) {
-    // Unknown requirement sorts last: 0 would put it in front of a drop that
-    // really is nearly finished.
-    if (!item || !item.hours) return Infinity;
+    /*
+     * Unknown requirement sorts last: 0 would put it in front of a drop that
+     * really is nearly finished. A finite sentinel rather than Infinity,
+     * because two unknowns subtract to NaN, and a comparator that returns NaN
+     * leaves the order of the whole list up to the engine.
+     */
+    if (!item || !item.hours) return Number.MAX_VALUE;
     return Math.max(0, item.hours * 3600000 * (1 - (item.percent || 0) / 100));
   }
 
@@ -648,10 +679,10 @@
       });
     });
 
-    var watchlistTimer = null;
     $('watchlist').addEventListener('input', function () {
       clearTimeout(watchlistTimer);
       watchlistTimer = setTimeout(function () {
+        watchlistTimer = null;
         var list = $('watchlist').value
           .split('\n')
           .map(function (x) {

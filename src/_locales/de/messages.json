@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "Drop" },
   "dropProgressDone": { "message": "Fertig" },
   "dropProgressEmpty": { "message": "Noch kein Fortschritt gelesen. Er wird von der Drops-Inventarseite geholt, sobald sie das nächste Mal offen ist." },
+  "dropProgressNone": { "message": "Keine Drops in Arbeit. Alle Kampagnen im Inventar sind beendet oder bereits abgeholt." },
 
   "btnDropsNow": { "message": "Drops jetzt prüfen" },
   "btnDropsNowBusy": { "message": "Prüft…" },

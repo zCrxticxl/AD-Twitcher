@@ -92,8 +92,11 @@ function watchContentSandbox() {
   const unlisten = (type, fn) => {
     handlers.set(type, (handlers.get(type) || []).filter((x) => x !== fn));
   };
+  // Mutable, so a scenario can take the player away: an offline channel mounts
+  // none at all, and a stream that ends has its torn down.
+  const videos = [video];
   const document = {
-    querySelectorAll: (selector) => selector === 'video' ? [video] : [],
+    querySelectorAll: (selector) => selector === 'video' ? videos.slice() : [],
     addEventListener: listen, removeEventListener: unlisten
   };
   const sandbox = {
@@ -115,7 +118,7 @@ function watchContentSandbox() {
   vm.createContext(sandbox);
   vm.runInContext(read('src/content/modules/watch-health.js'), sandbox);
   return {
-    sandbox, video, sent, timeouts, intervals,
+    sandbox, video, videos, sent, timeouts, intervals,
     advance(ms) { now += ms; },
     fire(type, event) {
       (handlers.get(type) || []).forEach((fn) => fn(Object.assign({type}, event)));
@@ -153,11 +156,24 @@ function watchBackgroundSandbox() {
     },
     runtime: {getURL: (path) => 'extension://' + path}
   };
+  const localQueues = {};
   const sandbox = {
     globalThis: null, self: null, console, Promise, Number, Date: FakeDate,
     ADT: {
       api, log: {warn() {}},
       msg: (key, value) => key + ':' + value,
+      // Mirrors lib/storage.js, which the background pulls in alongside this
+      // file. Serialization is the point, so it is reproduced, not stubbed.
+      updateLocal(key, mutate) {
+        const run = (localQueues[key] || Promise.resolve())
+          .then(() => api.storage.local.get(key))
+          .then((res) => mutate((res && res[key]) || {}))
+          .then((next) => next === undefined
+            ? undefined
+            : api.storage.local.set({[key]: next}).then(() => next));
+        localQueues[key] = run.catch(() => {});
+        return run;
+      },
       settings: {get: () => Promise.resolve({
         enabled: true,
         watchHealth: {
@@ -184,11 +200,16 @@ function watchBackgroundSandbox() {
  *
  * @param {!Object=} storage Shared storage.local backing object.
  * @param {!Object=} tabs Tab id to tab record.
+ * @param {!Object=} alarmStore Shared alarm registry. A second boot on the same
+ *     one reproduces the other thing MV3 does routinely: run this file again
+ *     with the previous worker's alarms still scheduled.
  */
-function swSandbox(storage = {}, tabs = {}) {
+function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
+  const alarmCreates = [];
   const messageHandlers = [];
   const timeouts = new Map();
   let nextTimer = 1;
+  const localQueues = {};
   const updates = [];
   const reloads = [];
   const claims = [];
@@ -224,8 +245,13 @@ function swSandbox(storage = {}, tabs = {}) {
       onUpdated: {addListener() {}, removeListener() {}}
     },
     alarms: {
-      create() {}, clear() {},
-      get: () => Promise.resolve({scheduledTime: 1700000000000}),
+      create(name, opts) {
+        alarmCreates.push({name, opts});
+        alarmStore[name] = Object.assign(
+          {name, scheduledTime: 1700000000000}, opts);
+      },
+      clear(name) { delete alarmStore[name]; return Promise.resolve(true); },
+      get: (name) => Promise.resolve(alarmStore[name]),
       onAlarm: {addListener() {}}
     },
     runtime: {
@@ -256,6 +282,22 @@ function swSandbox(storage = {}, tabs = {}) {
         configSig: () => 'sig',
         onChange() {}
       },
+      /*
+       * The real one lives in lib/storage.js, which the worker pulls in with
+       * importScripts. Reproduced over the fake storage rather than stubbed
+       * out, because it is the serialization itself that the mute bookkeeping
+       * depends on: two overlapping updates must not lose one another.
+       */
+      updateLocal(key, mutate) {
+        const run = (localQueues[key] || Promise.resolve())
+          .then(() => api.storage.local.get(key))
+          .then((res) => mutate((res && res[key]) || {}))
+          .then((next) => next === undefined
+            ? undefined
+            : api.storage.local.set({[key]: next}).then(() => next));
+        localQueues[key] = run.catch(() => {});
+        return run;
+      },
       liveWatch: {forgetTab() {}, status: () => Promise.resolve({})},
       watchHealth: {
         forgetTab() {},
@@ -282,7 +324,7 @@ function swSandbox(storage = {}, tabs = {}) {
   vm.runInContext(read('src/background/sw.js'), sandbox);
 
   return {
-    storage, tabs, updates, reloads, claims,
+    storage, tabs, updates, reloads, claims, alarmCreates, alarmStore,
     setClaimReport(report) { claimReport = report; },
     /**
      * The worker answers asynchronously, so the reply is read off the returned
@@ -389,6 +431,30 @@ console.log('\n[lifecycle harness]');
 {
   const h = watchContentSandbox();
   h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
+  h.fire('keydown', {key: ' ', target: {tagName: 'TEXTAREA'}}); // User types space in chat.
+  h.video.paused = true;
+  h.fire('pause', {target: h.video});
+  h.runTimeouts();
+  assert('typing in chat is not interpreted as a pause command', h.video.plays === 1);
+  h.sandbox.ADT.modules.watchHealth.stop();
+}
+{
+  const h = watchContentSandbox();
+  h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
+  h.fire('keydown', {key: ' '});              // User pauses
+  h.video.paused = true;
+  h.fire('pause', {target: h.video});
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('userPaused becomes true', h.sent[h.sent.length - 1].userPaused === true);
+  
+  h.fire('play', {target: h.video});          // User clicks play, but buffering (no 'playing' yet)
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('userPaused is cleared by the play event itself', h.sent[h.sent.length - 1].userPaused === false);
+  h.sandbox.ADT.modules.watchHealth.stop();
+}
+{
+  const h = watchContentSandbox();
+  h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
   for (let i = 0; i < 12; i++) {
     h.video.paused = true;
     h.fire('pause', {target: h.video});
@@ -419,6 +485,91 @@ console.log('\n[lifecycle harness]');
   const before = h.sent.length;
   h.sandbox.ADT.modules.watchHealth.reportNow();
   assert('watchdog sends no heartbeat after stop()', h.sent.length === before);
+}
+{
+  /*
+   * An offline channel mounts no player at all. A heartbeat from such a tab has
+   * the watchdog wait for progress that is never coming, and five minutes later
+   * it notifies and reloads a tab that was never broken. The tab is handed back
+   * instead, and picked up again the moment a player appears.
+   */
+  const h = watchContentSandbox();
+  h.videos.length = 0;                        // Offline: no <video> on the page.
+  h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('a page with no player sends no heartbeat',
+    h.sent.filter((m) => m.type === 'adt:watch-heartbeat').length === 0);
+  assert('and does not register the tab at all',
+    h.sent.filter((m) => m.type === 'adt:watch-stopped').length === 0);
+
+  // The stream goes live and Twitch mounts the player.
+  h.videos.push(h.video);
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('once a player mounts the tab is registered',
+    h.sent.filter((m) => m.type === 'adt:watch-heartbeat').length === 1);
+
+  // The stream ends and the player is torn down again.
+  h.videos.length = 0;
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('when the player disappears the tab is handed back once',
+    h.sent.filter((m) => m.type === 'adt:watch-stopped').length === 1);
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('and not handed back again on every later report',
+    h.sent.filter((m) => m.type === 'adt:watch-stopped').length === 1);
+  h.sandbox.ADT.modules.watchHealth.stop();
+}
+{
+  /*
+   * The pause the user asked for travels to the background, which is the only
+   * way it can tell that standing video time apart from a stall.
+   */
+  const h = watchContentSandbox();
+  h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('a normal heartbeat reports no user pause',
+    h.sent[h.sent.length - 1].userPaused === false);
+  h.fire('keydown', {key: ' '});
+  h.video.paused = true;
+  h.fire('pause', {target: h.video});
+  h.runTimeouts();
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('a user pause is reported to the background',
+    h.sent[h.sent.length - 1].userPaused === true);
+  h.video.paused = false;
+  h.fire('playing', {target: h.video});
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('and is dropped again once playback returns',
+    h.sent[h.sent.length - 1].userPaused === false);
+  h.sandbox.ADT.modules.watchHealth.stop();
+}
+{
+  /*
+   * The background half of the same contract: only the progress reason is
+   * waived, so a tab that stops reporting is still caught while paused.
+   */
+  const h = watchBackgroundSandbox();
+  await h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'paused', playing: false, advancing: false, userPaused: true
+  }, 51);
+  h.advance(6 * 60000);
+  // Keep reporting, as a paused tab really does.
+  await h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'paused', playing: false, advancing: false, userPaused: true
+  }, 51);
+  await h.sandbox.ADT.watchHealth.check();
+  assert('a user-paused tab raises no notification', h.notifications.length === 0);
+  assert('and is never reloaded', h.reloads.length === 0);
+
+  await h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'paused', playing: true, advancing: true, userPaused: false
+  }, 51);
+  h.advance(6 * 60000);
+  await h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'paused', playing: true, advancing: false, userPaused: false
+  }, 51);
+  await h.sandbox.ADT.watchHealth.check();
+  assert('but a real stall after they resume still is',
+    h.notifications.length === 1 && h.reloads.length === 1);
 }
 {
   const h = watchBackgroundSandbox();
@@ -583,6 +734,138 @@ console.log('\n[lifecycle harness]');
   await h.settle();
   assert('the popup gets the snapshot with the rest of the activity',
     reply.response.activity.progress.items[0].name === 'Rare 2');
+
+  /*
+   * An empty report means two different things depending on whether the page
+   * was read. A scan that found nothing to go on - a page still loading, a
+   * renamed selector - must not erase a good snapshot, while a page that was
+   * read and holds nothing earnable has to be able to, or the popup keeps
+   * listing drops from a campaign that closed weeks ago.
+   */
+  h.send({type: 'adt:drops-progress', items: []}, 5);
+  await h.settle();
+  assert('an empty report on its own leaves the snapshot alone',
+    h.storage.dropsProgress.items.length === 3);
+
+  h.send({type: 'adt:drops-progress', items: [], read: true}, 5);
+  await h.settle();
+  assert('an empty report from a page that was read clears the snapshot',
+    h.storage.dropsProgress.items.length === 0);
+  assert('and timestamps it, so the popup can tell "nothing left" from "never read"',
+    typeof h.storage.dropsProgress.updatedAt === 'number');
+}
+
+{
+  /*
+   * MV3 terminates the worker whenever it goes idle, so this whole file runs
+   * again on every wake - and the one-minute health alarm guarantees a wake at
+   * least once a minute. Creating an alarm that already exists restarts its
+   * countdown, so recreating the drops alarm on each boot pushed it ten minutes
+   * out once a minute: it could never reach its own delay, and the periodic
+   * check was dead code in practice while looking perfectly correct.
+   */
+  const storage = {};
+  const alarms = {};
+
+  const first = swSandbox(storage, {}, alarms);
+  await first.settle();
+  assert('the first boot schedules the drops alarm',
+    first.alarmCreates.filter((a) => a.name === 'adt-drops-check').length === 1);
+  assert('and the health alarm',
+    first.alarmCreates.filter((a) => a.name === 'adt-health').length === 1);
+
+  const restart = swSandbox(storage, {}, alarms);
+  await restart.settle();
+  assert('a worker restart does not reschedule the drops alarm',
+    restart.alarmCreates.filter((a) => a.name === 'adt-drops-check').length === 0);
+  assert('nor the health alarm',
+    restart.alarmCreates.filter((a) => a.name === 'adt-health').length === 0);
+
+  // A changed interval is the one reason to restart the countdown, so the
+  // period is what identity is judged on rather than mere existence.
+  alarms['adt-drops-check'].periodInMinutes = 45;
+  const reconfigured = swSandbox(storage, {}, alarms);
+  await reconfigured.settle();
+  assert('but a changed interval does reschedule it',
+    reconfigured.alarmCreates.filter((a) => a.name === 'adt-drops-check').length === 1);
+}
+
+{
+  /*
+   * A tab that is still loading cannot answer a ping, so the background injects
+   * into it, and the browser then injects the same files again at
+   * document_idle. Everything below is what the second pass used to duplicate.
+   */
+  const listeners = [];
+  const routeHooks = [];
+  const changeHooks = [];
+  const intervals = [];
+  let now = 1000000;
+  class FakeDate extends Date { static now() { return now; } }
+
+  const runtime = {
+    onMessage: {addListener(fn) { listeners.push(fn); }},
+    id: 'adt'
+  };
+  const sandbox = {
+    globalThis: null, window: null, self: null, console,
+    Promise, Date: FakeDate, Set, WeakSet, Object, Array, JSON, Math,
+    location: {pathname: '/somechannel', href: 'https://twitch.tv/somechannel'},
+    document: {body: {}, addEventListener() {}},
+    chrome: runtime && {runtime},
+    setTimeout() { return 1; }, clearTimeout() {},
+    setInterval(fn) { intervals.push(fn); return intervals.length; },
+    clearInterval() {},
+    addEventListener() {},
+    history: {pushState() {}, replaceState() {}},
+    ADT: {
+      api: {runtime},
+      log: {setLevel() {}, debug() {}, info() {}, warn() {}, error() {}},
+      dom: {
+        currentChannel: () => 'somechannel',
+        onRouteChange(fn) { routeHooks.push(fn); },
+        resetClickBudget() {}
+      },
+      modules: {},
+      settings: {
+        get: () => Promise.resolve({enabled: false, logLevel: 'info'}),
+        configSig: () => 'sig',
+        onChange(fn) { changeHooks.push(fn); }
+      }
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  sandbox.self = sandbox;
+  vm.createContext(sandbox);
+
+  const beacon = read('src/content/beacon.js');
+  const index = read('src/content/index.js');
+
+  vm.runInContext(beacon, sandbox);
+  vm.runInContext(index, sandbox);
+  const afterFirst = {
+    listeners: listeners.length,
+    routes: routeHooks.length,
+    changes: changeHooks.length
+  };
+  assert('a first injection wires the orchestrator up once',
+    afterFirst.listeners === 2 && afterFirst.routes === 1 && afterFirst.changes === 1);
+
+  vm.runInContext(beacon, sandbox);
+  vm.runInContext(index, sandbox);
+  assert('a second injection adds no second message listener',
+    listeners.length === afterFirst.listeners);
+  assert('nor a second route observer', routeHooks.length === afterFirst.routes);
+  assert('nor a second settings subscriber', changeHooks.length === afterFirst.changes);
+  assert('and the second pass is recorded rather than silent',
+    sandbox.__ADT_DIAG.reinjected === 1);
+
+  // The diagnostic must keep meaning what it says: `loaded` is files that
+  // reached their last statement, and a guarded file still reached it once.
+  assert('the ping still reports both files as loaded',
+    sandbox.__ADT_DIAG.loaded.includes('content/beacon.js') &&
+    sandbox.__ADT_DIAG.loaded.includes('content/index.js'));
 }
 
 console.log(failures ? `\n${failures} harness failure(s).\n` : '\nLifecycle harness clean.\n');

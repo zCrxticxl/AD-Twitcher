@@ -16,6 +16,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('content/modules/channel-points.js')) return;
+
   g.ADT = g.ADT || {};
   g.ADT.modules = g.ADT.modules || {};
   var D = g.ADT.dom;

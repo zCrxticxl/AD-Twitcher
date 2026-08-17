@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "Drop" },
   "dropProgressDone": { "message": "Done" },
   "dropProgressEmpty": { "message": "No progress read yet. It is taken from the Drops inventory page the next time it is open." },
+  "dropProgressNone": { "message": "No drops in progress. Every campaign in the inventory has ended or been collected." },
 
   "btnDropsNow": { "message": "Check drops now" },
   "btnDropsNowBusy": { "message": "Checking…" },
