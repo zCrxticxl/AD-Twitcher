@@ -28,6 +28,8 @@
  *  [19] the popup can prove the extension is still working
  *  [20] drop progress is read, validated and shown
  *  [21] nothing runs twice, outlives its stop(), or races another context
+ *  [22] the popup's own poll cannot clobber a control the user just set
+ *  [23] a rejected settings write cannot fail silently
  */
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -869,6 +871,74 @@ console.log('\n[21] Lifecycle and single execution');
   /function answerWith/.test(swSource) && !/\)\.then\(sendResponse\);/.test(swSource)
     ? ok('async message handlers answer even when they fail')
     : fail('sw.js has a message handler that can leave its port open');
+}
+
+console.log('\n[22] Popup polling and active editing');
+{
+  /*
+   * The whole popup re-renders every three seconds. `settings.set()` from the
+   * popup round-trips through the background before its local cache updates,
+   * so a poll landing in that window used to reread the stale cached value and
+   * flip the master toggle back under the user's own click - the same class of
+   * bug the data-set fields and the watchlist textarea were already guarded
+   * against, just missed for this one control.
+   */
+  const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+
+  /var masterTogglePending = false;/.test(js)
+    ? ok('a pending flag tracks the in-flight master-toggle write')
+    : fail('the master toggle has no guard against a concurrent poll');
+
+  /if \(!masterTogglePending\) \{[\s\S]{0,80}masterToggle'\)\.checked/.test(js)
+    ? ok('renderSettings skips the checkbox while a write is in flight')
+    : fail('renderSettings can still overwrite masterToggle mid-write');
+
+  /masterTogglePending = true;[\s\S]{0,200}masterTogglePending = false;/.test(js)
+    ? ok('the flag is set before the write and cleared once it settles')
+    : fail('the master-toggle pending flag is never armed or cleared');
+
+  /\$\('watchlist'\) !== editing && !watchlistTimer/.test(js)
+    ? ok('the watchlist textarea keeps its own re-render guard')
+    : fail('the watchlist textarea lost its poll-clobber guard');
+
+  /window\.addEventListener\('unload', function \(\) \{ clearInterval\(pollTimer\); \}\)/.test(js)
+    ? ok('the poll timer is cleared when the popup unloads')
+    : fail('popup.js can leave its poll timer running after unload');
+}
+
+console.log('\n[23] Settings writes cannot fail silently');
+{
+  /*
+   * settings.set() from the popup round-trips through the background and
+   * throws when that reply says the write failed - realistically because the
+   * message arrived while the MV3 worker was mid-restart. A caller with no
+   * rejection handler leaves that as a genuine unhandled promise rejection,
+   * and the field it touched keeps showing an edit that storage never
+   * received, with nothing telling the user. Every write site has to
+   * terminate the chain and resync the control to what is actually stored.
+   */
+  const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+  const viewerStats = await readFile(join(SRC, 'content/modules/viewer-stats.js'), 'utf8');
+
+  /function settingsWriteFailed\(e\) \{[\s\S]{0,300}ADT\.settings\.get\(\)\.then\(renderSettings\);/.test(js)
+    ? ok('the shared failure handler re-syncs the popup from real storage')
+    : fail('settingsWriteFailed is missing or no longer resyncs the popup');
+
+  /patchFromPath\(el\.dataset\.set, val\)\)\.then\(function \(\) \{[\s\S]{0,120}\}, settingsWriteFailed\);/.test(js)
+    ? ok('every [data-set] field routes a failed write through the handler')
+    : fail('the generic settings-field handler can drop a write silently');
+
+  /autoJoin: \{ channels: list \} \}\)\.catch\(settingsWriteFailed\);/.test(js)
+    ? ok('the watchlist textarea routes a failed write through the handler')
+    : fail('the watchlist write can fail with no handler attached');
+
+  /enabled: checked \}\)\.then\(function \(\) \{[\s\S]{0,200}\}, function \(e\) \{\s*masterTogglePending = false;\s*settingsWriteFailed\(e\);/.test(js)
+    ? ok('the master toggle routes a failed write through the handler too')
+    : fail('the master toggle can leave a rejected write dangling');
+
+  /viewerStats: \{ panel: false \} \}\)\.catch\(function \(e\) \{/.test(viewerStats)
+    ? ok('the viewer-stats panel-close write is not fire-and-forget')
+    : fail('viewer-stats.js can drop a failed settings write silently');
 }
 
 console.log(errors ? `\n${errors} problem(s).\n` : '\nAll clean.\n');

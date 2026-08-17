@@ -244,7 +244,9 @@
     close.setAttribute('aria-label', g.ADT.msg('panelClose'));
     close.textContent = '×';
     close.addEventListener('click', function () {
-      g.ADT.settings.set({ viewerStats: { panel: false } });
+      g.ADT.settings.set({ viewerStats: { panel: false } }).catch(function (e) {
+        log.warn('Panel-close write failed: ' + (e && e.message));
+      });
     });
 
     var head = document.createElement('div');

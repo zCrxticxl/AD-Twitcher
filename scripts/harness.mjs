@@ -212,8 +212,11 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
   const localQueues = {};
   const updates = [];
   const reloads = [];
+  const removes = [];
   const claims = [];
+  const alarmHandlers = [];
   let claimReport = null;
+  let nextTabId = 99;
 
   const api = {
     storage: {
@@ -238,8 +241,19 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
       },
       query: (q) => Promise.resolve(
         Array.isArray(q.url) ? Object.values(tabs).filter((t) => t.inventory) : []),
-      create: () => Promise.resolve({id: 99}),
-      remove: () => Promise.resolve(),
+      create: () => {
+        const id = nextTabId++;
+        tabs[id] = {id};
+        return Promise.resolve(tabs[id]);
+      },
+      // Real Chrome rejects a remove() for an id that is not an open tab -
+      // the close-tab alarm's own .catch() exists for exactly that reply.
+      remove: (id) => {
+        if (!tabs[id]) return Promise.reject(new Error('No tab with id: ' + id));
+        delete tabs[id];
+        removes.push(id);
+        return Promise.resolve();
+      },
       reload(id) { reloads.push(id); return Promise.resolve(); },
       onRemoved: {addListener() {}},
       onUpdated: {addListener() {}, removeListener() {}}
@@ -252,7 +266,7 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
       },
       clear(name) { delete alarmStore[name]; return Promise.resolve(true); },
       get: (name) => Promise.resolve(alarmStore[name]),
-      onAlarm: {addListener() {}}
+      onAlarm: {addListener(fn) { alarmHandlers.push(fn); }}
     },
     runtime: {
       id: 'adt',
@@ -324,7 +338,7 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
   vm.runInContext(read('src/background/sw.js'), sandbox);
 
   return {
-    storage, tabs, updates, reloads, claims, alarmCreates, alarmStore,
+    storage, tabs, updates, reloads, removes, claims, alarmCreates, alarmStore,
     setClaimReport(report) { claimReport = report; },
     /**
      * The worker answers asynchronously, so the reply is read off the returned
@@ -337,6 +351,8 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
       }));
       return reply;
     },
+    /** Drives the real api.alarms.onAlarm listener sw.js registered. */
+    fireAlarm(name) { alarmHandlers.forEach((fn) => fn({name})); },
     /** Lets the promise chains inside the worker run to completion. */
     async settle(rounds = 12) {
       for (let i = 0; i < rounds; i++) {
@@ -866,6 +882,272 @@ console.log('\n[lifecycle harness]');
   assert('the ping still reports both files as loaded',
     sandbox.__ADT_DIAG.loaded.includes('content/beacon.js') &&
     sandbox.__ADT_DIAG.loaded.includes('content/index.js'));
+}
+
+console.log('\n[SPA navigation harness]');
+/**
+ * Builds a content/index.js sandbox with real timer semantics (a controllable
+ * map instead of the no-op stand-ins the double-injection test above uses) and
+ * spyable modules, so the route-change debounce itself can be driven and
+ * observed instead of only checked for listener counts.
+ *
+ * @param {!Object<string, !Object>} moduleSpecs Module name to
+ *     `{enabled, start, stop}`; `start`/`stop` default to no-op counters.
+ * @return {!Object} Sandbox handle.
+ */
+function indexSandbox(moduleSpecs) {
+  const timeouts = new Map();
+  let nextTimer = 1;
+  const routeHooks = [];
+  let channel = 'alpha';
+  const calls = {};
+  const modules = {};
+  const want = {};
+  Object.keys(moduleSpecs).forEach((name) => {
+    const spec = moduleSpecs[name];
+    calls[name] = {start: 0, stop: 0};
+    modules[name] = {
+      start(cfg) { calls[name].start++; if (spec.start) spec.start(cfg); },
+      stop() { calls[name].stop++; if (spec.stop) spec.stop(); }
+    };
+    want[name] = {enabled: spec.enabled !== false};
+  });
+  let settingsGetCalls = 0;
+  const runtime = {onMessage: {addListener() {}}, id: 'adt'};
+  const sandbox = {
+    globalThis: null, window: null, self: null, console,
+    Promise, Date, Set, WeakSet, Object, Array, JSON, Math,
+    location: {pathname: '/alpha', href: 'https://twitch.tv/alpha'},
+    document: {body: {}, addEventListener() {}},
+    chrome: {runtime},
+    setTimeout(fn) { const id = nextTimer++; timeouts.set(id, fn); return id; },
+    clearTimeout(id) { timeouts.delete(id); },
+    setInterval() { return nextTimer++; }, clearInterval() {},
+    addEventListener() {},
+    history: {pushState() {}, replaceState() {}},
+    ADT: {
+      api: {runtime},
+      log: {setLevel() {}, debug() {}, info() {}, warn() {}, error() {}},
+      dom: {
+        currentChannel: () => channel,
+        onRouteChange(fn) { routeHooks.push(fn); },
+        resetClickBudget() {}
+      },
+      modules,
+      settings: {
+        get() {
+          settingsGetCalls++;
+          return Promise.resolve(Object.assign({enabled: true, logLevel: 'info'},
+            {watchHealth: {enabled: false}, channelPoints: {enabled: false},
+              adMute: {enabled: false}, viewerStats: {enabled: false},
+              drops: {enabled: false}, autoJoin: {enabled: false}}, want));
+        },
+        configSig: () => 'sig',
+        onChange() {}
+      }
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  sandbox.self = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(read('src/content/beacon.js'), sandbox);
+  vm.runInContext(read('src/content/index.js'), sandbox);
+  return {
+    sandbox, calls, timeouts,
+    setChannel(name, path) { channel = name; sandbox.location.pathname = path; },
+    navigate(path) { routeHooks[0](path); },
+    settingsGetCalls: () => settingsGetCalls,
+    async settle() {
+      for (let i = 0; i < 4; i++) await Promise.resolve();
+    },
+    async fireTimers() {
+      const pending = [...timeouts.values()];
+      timeouts.clear();
+      pending.forEach((fn) => fn());
+      await this.settle();
+    }
+  };
+}
+
+{
+  /*
+   * Twitch tears down the whole page on a channel switch, so the route
+   * handler stops every running module the instant the path changes and only
+   * restarts them once Twitch's own DOM has had 1200ms to settle. A viewer
+   * clicking through several channels in a row must collapse to one restart
+   * on the channel they actually land on, not one per intermediate hop.
+   */
+  const h = indexSandbox({channelPoints: {}, watchHealth: {}});
+  await h.settle();
+  assert('initial load starts the channel-page modules once',
+    h.calls.channelPoints.start === 1 && h.calls.watchHealth.start === 1);
+  const settingsReadsBeforeBurst = h.settingsGetCalls();
+
+  // Three rapid hops, all inside the 1200ms settle window.
+  h.setChannel('bravo', '/bravo'); h.navigate('/bravo');
+  h.setChannel('charlie', '/charlie'); h.navigate('/charlie');
+  h.setChannel('delta', '/delta'); h.navigate('/delta');
+
+  assert('each hop tears the previous channel down immediately',
+    h.calls.channelPoints.stop === 1 && h.calls.watchHealth.stop === 1);
+  assert('no restart has happened yet - it is still debounced',
+    h.calls.channelPoints.start === 1 && h.calls.watchHealth.start === 1);
+  assert('only the last hop\'s restart timer is still pending',
+    h.timeouts.size === 1);
+
+  await h.fireTimers();
+  assert('rapid switching restarts modules exactly once, not once per hop',
+    h.calls.channelPoints.start === 2 && h.calls.watchHealth.start === 2);
+  assert('settings was read exactly once for the whole burst, not once per hop',
+    h.settingsGetCalls() - settingsReadsBeforeBurst === 1);
+  assert('no further stop happens for modules already torn down mid-burst',
+    h.calls.channelPoints.stop === 1 && h.calls.watchHealth.stop === 1);
+}
+{
+  // A module whose stop() throws (a Twitch selector rename mid-session) must
+  // not stop the others from tearing down, or a channel switch leaves half
+  // the previous page's modules still running underneath the new one.
+  const h = indexSandbox({
+    channelPoints: {},
+    drops: {stop() { throw new Error('selector gone'); }}
+  });
+  await h.settle();
+  assert('both modules start on load', h.calls.channelPoints.start === 1 && h.calls.drops.start === 1);
+
+  h.setChannel('bravo', '/bravo'); h.navigate('/bravo');
+  assert('the sibling module still tears down after drops.stop() throws',
+    h.calls.channelPoints.stop === 1);
+  assert('the throwing module is still counted as torn down',
+    h.calls.drops.stop === 1);
+
+  await h.fireTimers();
+  assert('both modules restart on the new channel, including the one that threw',
+    h.calls.channelPoints.start === 2 && h.calls.drops.start === 2);
+}
+
+console.log('\n[settings write failure handling]');
+{
+  /*
+   * settings.set() from the popup/content context sends a message to the
+   * background and throws when the reply says the write failed - most
+   * realistically because the message arrived while the MV3 worker was
+   * mid-restart, exactly the case Scenario 6 is about. A caller that leaves
+   * that rejection with no handler produces a genuine unhandled promise
+   * rejection in a real popup: verified here against the real, unmodified
+   * lib/storage.js and the real settingsWriteFailed extracted from popup.js,
+   * not a rewritten stand-in for either.
+   */
+  const storageSrc = read('src/lib/storage.js');
+  const popupSrc = read('src/popup/popup.js');
+  const failedBody = popupSrc.match(/function settingsWriteFailed[\s\S]*?\n {2}\}/)[0];
+
+  let renderedWith = null;
+  const sandbox = {
+    globalThis: null, window: null, console, Promise, JSON,
+    ADT: {
+      api: {
+        storage: {
+          onChanged: { addListener() {} },
+          local: { get: () => Promise.resolve({ settings: { enabled: true } }) }
+        }
+      },
+      // A message sent while the MV3 worker is mid-restart: nothing answers,
+      // and ADT.send resolves null rather than rejecting (see lib/browser.js).
+      send() { return Promise.resolve(null); },
+      log: { error() {}, warn() {} }
+    },
+    renderSettings(s) { renderedWith = s; }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(storageSrc, sandbox);
+
+  let getCalls = 0;
+  const realGet = sandbox.ADT.settings.get;
+  sandbox.ADT.settings.get = function () { getCalls++; return realGet(); };
+
+  const settingsWriteFailed = vm.runInContext(
+    '(' + failedBody.replace(/^function settingsWriteFailed/, 'function') + ')',
+    sandbox);
+
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+
+  // Exactly how popup.js wires every settings.set() call site: the rejection
+  // handler is attached in the same tick the write is issued.
+  sandbox.ADT.settings.set({ enabled: false }).then(function () {
+    throw new Error('should not resolve: ADT.send returned null');
+  }, settingsWriteFailed);
+
+  await new Promise((resolve) => setImmediate(resolve));
+  await new Promise((resolve) => setImmediate(resolve));
+  process.off('unhandledRejection', onUnhandled);
+
+  assert('a rejected settings.set() routed through settingsWriteFailed raises no unhandled rejection',
+    unhandled.length === 0);
+  assert('the failure handler re-reads settings to resync the control',
+    getCalls === 1);
+  assert('and hands the real stored value to renderSettings, not the failed edit',
+    !!renderedWith && renderedWith.enabled === true);
+}
+
+console.log('\n[close-tab alarm lifecycle]');
+{
+  /*
+   * The background opens a hidden inventory tab and schedules a
+   * chrome.alarms entry to close it later - an alarm rather than
+   * setTimeout(), because the point of the alarms API in MV3 is that it
+   * survives the service worker being torn down and restarted in between.
+   * Chrome's own documentation guarantees tab ids are unique within a
+   * browser session, so a stale alarm can never land on a different,
+   * unrelated tab that reused the same numeric id; the only real question is
+   * whether firing it late (the tab already gone) is handled cleanly.
+   */
+  const tabs = {};
+  const h = swSandbox({}, tabs, {});
+  await h.send({type: 'adt:drops-check-now'});
+  await h.settle();
+
+  const openedId = Object.keys(tabs).map(Number)[0];
+  assert('opening the inventory tab creates exactly one close-tab alarm',
+    h.alarmCreates.filter((a) => a.name === 'adt-close-tab:' + openedId).length === 1);
+
+  h.fireAlarm('adt-close-tab:' + openedId);
+  await h.settle();
+  assert('firing the alarm closes the tab it named, and only that one',
+    h.removes.length === 1 && h.removes[0] === openedId);
+  assert('the tab is actually gone from the tab set',
+    !tabs[openedId]);
+
+  // The user closed the tab by hand before the alarm fired - or it fired
+  // once already. Either way the id no longer refers to an open tab, which
+  // is exactly the rejection api.tabs.remove() itself models. Nothing in
+  // sw.js clears the alarm on tabs.onRemoved, so this rejection is the
+  // normal case, not a corner one, and it must not surface as an unhandled
+  // promise rejection.
+  const unhandled = [];
+  const onUnhandled = (reason) => unhandled.push(reason);
+  process.on('unhandledRejection', onUnhandled);
+  h.fireAlarm('adt-close-tab:' + openedId);
+  await h.settle();
+  await new Promise((resolve) => setImmediate(resolve));
+  process.off('unhandledRejection', onUnhandled);
+  assert('firing a close-tab alarm for an already-gone tab does not throw',
+    h.removes.length === 1);
+  assert('and does not raise an unhandled rejection either',
+    unhandled.length === 0);
+
+  // A second, unrelated tab must never be touched by a stray or repeated
+  // alarm for a different id.
+  const otherTabs = {5: {id: 5, inventory: true}};
+  const other = swSandbox({}, otherTabs, {});
+  other.fireAlarm('adt-close-tab:999999');
+  await other.settle();
+  assert('an alarm naming an id nobody holds touches no real tab',
+    !!otherTabs[5] && other.removes.length === 0);
 }
 
 console.log(failures ? `\n${failures} harness failure(s).\n` : '\nLifecycle harness clean.\n');

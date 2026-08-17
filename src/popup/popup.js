@@ -39,6 +39,15 @@
   var watchlistTimer = null;
 
   /**
+   * True while a master-toggle write is in flight. `set()` round-trips through
+   * the background, so a poll landing in that window would otherwise read the
+   * still-cached pre-toggle value and flip the checkbox back under the user's
+   * click until the next poll catches up.
+   * @type {boolean}
+   */
+  var masterTogglePending = false;
+
+  /**
    * Must mirror content_scripts[0].js in both manifests. scripts/check.mjs
    * fails the build if the two drift apart.
    * @const {!Array<string>}
@@ -171,8 +180,10 @@
   function renderSettings(s) {
     var editing = document.activeElement;
 
-    $('masterToggle').checked = !!s.enabled;
-    $('statusDot').classList.toggle('is-on', !!s.enabled);
+    if (!masterTogglePending) {
+      $('masterToggle').checked = !!s.enabled;
+      $('statusDot').classList.toggle('is-on', !!s.enabled);
+    }
 
     $$('[data-set]').forEach(function (el) {
       if (el === editing) return;
@@ -659,6 +670,21 @@
 
   /* ------------------------------------------------------------ bindings */
 
+  /**
+   * `settings.set()` round-trips through the background and rejects if that
+   * fails - most often a message sent while the MV3 worker is mid-restart.
+   * The control whatever the user just touched shows right now was never
+   * actually stored, so the only correct move is to put it back in sync with
+   * what is. `renderSettings` already knows how to do that without touching a
+   * field the user is still editing.
+   *
+   * @param {*} e
+   */
+  function settingsWriteFailed(e) {
+    ADT.log.error('Settings write failed: ' + (e && e.message));
+    ADT.settings.get().then(renderSettings);
+  }
+
   function bindInputs() {
     $$('[data-set]').forEach(function (el) {
       var evt = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
@@ -675,7 +701,7 @@
 
         ADT.settings.set(patchFromPath(el.dataset.set, val)).then(function () {
           ADT.send({ type: 'adt:settings-changed' });
-        });
+        }, settingsWriteFailed);
       });
     });
 
@@ -693,14 +719,20 @@
           .filter(Boolean);
         // Drop duplicates, keep order.
         list = list.filter(function (x, i) { return list.indexOf(x) === i; });
-        ADT.settings.set({ autoJoin: { channels: list } });
+        ADT.settings.set({ autoJoin: { channels: list } }).catch(settingsWriteFailed);
       }, 500);
     });
 
     $('masterToggle').addEventListener('change', function () {
-      ADT.settings.set({ enabled: $('masterToggle').checked }).then(function () {
-        $('statusDot').classList.toggle('is-on', $('masterToggle').checked);
+      var checked = $('masterToggle').checked;
+      masterTogglePending = true;
+      ADT.settings.set({ enabled: checked }).then(function () {
+        masterTogglePending = false;
+        $('statusDot').classList.toggle('is-on', checked);
         ADT.send({ type: 'adt:settings-changed' });
+      }, function (e) {
+        masterTogglePending = false;
+        settingsWriteFailed(e);
       });
     });
 
