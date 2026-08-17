@@ -20,6 +20,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('content/modules/sidebar-watch.js')) return;
+
   g.ADT = g.ADT || {};
   g.ADT.modules = g.ADT.modules || {};
   var D = g.ADT.dom;
@@ -80,7 +83,14 @@
     'directory', 'videos', 'settings', 'drops', 'search', 'u', 'p'
   ];
 
-  var state = { running: false, timer: null, cfg: null, lastSig: '' };
+  var state = {
+    running: false,
+    timer: null,
+    expandTimer: null,
+    firstTimer: null,
+    cfg: null,
+    lastSig: ''
+  };
 
   /**
    * @param {?string} href Absolute or root-relative.
@@ -133,7 +143,7 @@
   var expanded = false;
 
   function expandSidebar() {
-    if (expanded) return;
+    if (!state.running || expanded) return;
     var btns = D.buttonsByText(SHOW_MORE_TEXTS);
     if (!btns.length || !D.isVisible(btns[0])) return;
     expanded = true;
@@ -190,9 +200,15 @@
     state.lastSig = '';
     expanded = false;
 
-    setTimeout(expandSidebar, 4000);
+    /*
+     * Tracked, because this one clicks. `report` checks `state.running` and is
+     * harmless once the module is gone, but a pending expand fired four seconds
+     * after a channel switch and clicked a button belonging to a module that no
+     * longer existed - the one thing no delayed action here is allowed to do.
+     */
+    state.expandTimer = setTimeout(expandSidebar, 4000);
     state.timer = setInterval(report, Math.max(15, cfg.pollIntervalSec) * 1000);
-    setTimeout(report, 3000);
+    state.firstTimer = setTimeout(report, 3000);
     log.debug('sidebar-watch: started');
   }
 
@@ -201,6 +217,14 @@
     if (state.timer) {
       clearInterval(state.timer);
       state.timer = null;
+    }
+    if (state.expandTimer) {
+      clearTimeout(state.expandTimer);
+      state.expandTimer = null;
+    }
+    if (state.firstTimer) {
+      clearTimeout(state.firstTimer);
+      state.firstTimer = null;
     }
     log.debug('sidebar-watch: stopped');
   }

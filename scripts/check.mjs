@@ -27,6 +27,7 @@
  *  [18] the popup shows the installed version, read from the manifest
  *  [19] the popup can prove the extension is still working
  *  [20] drop progress is read, validated and shown
+ *  [21] nothing runs twice, outlives its stop(), or races another context
  */
 import { readdir, stat, readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -701,9 +702,52 @@ console.log('\n[20] Drop progress');
     ? ok('a campaign counts as over when it no longer links to its channels')
     : fail('drops.js judges campaigns by the dimmed reward image again');
 
-  /if \(!live\.length\) live = out;/.test(drops)
-    ? ok('expired campaigns are dropped, but never the whole list')
-    : fail('drops.js can filter every drop away');
+  /*
+   * Two kinds of "over", and they must not share one safety net.
+   *
+   * The link heuristic is an inference about markup: a redesign could make it
+   * match everything, so it keeps its net and can never empty the list on its
+   * own. The notice is Twitch stating outright that a reward can no longer be
+   * earned, and gets no net at all - when every campaign on the page carries
+   * it, an empty list is the correct answer and the stale one is the wrong
+   * one. A text matcher fails by going quiet, which only makes the list too
+   * long again, so the net would buy nothing and cost the fix.
+   */
+  /if \(!live\.length\) live = earnable;/.test(drops)
+    ? ok('the campaign-link heuristic can never empty the list')
+    : fail('drops.js lets the campaign-link heuristic filter every drop away');
+
+  /function campaignIsRetired/.test(drops) && /UNAVAILABLE_TEXTS/.test(drops) &&
+      !/if \(!earnable\.length\)/.test(drops)
+    ? ok('a row Twitch calls unavailable is dropped, with no net under it')
+    : fail('drops.js ignores the "no longer available" notice, or nets it');
+
+  /*
+   * The notice is the load-bearing signal now, and it is read in the language
+   * Twitch renders. A locale missing from the table silently brings the bug
+   * back for exactly those users, and nothing else in the suite would notice.
+   */
+  {
+    const shipped = [...catalogs.keys()];
+    const table = drops.match(
+      /var UNAVAILABLE_TEXTS_BY_LOCALE = \{([\s\S]*?)\n {2}\};/);
+    const missing = table
+      ? shipped.filter((l) => !new RegExp('(^|[\\s{])' + l + ':').test(table[1]))
+      : shipped;
+    !missing.length
+      ? ok(`the unavailable notice is matched in all ${shipped.length} locales`)
+      : fail('drops.js cannot read the unavailable notice in: ' + missing.join(', '));
+  }
+
+  /*
+   * An empty report means two different things. A scan that found nothing to go
+   * on must leave the stored snapshot alone; a page that was read and holds
+   * nothing earnable has to be able to replace it, or the popup keeps showing
+   * drops from a campaign that closed weeks ago.
+   */
+  /scan\.read/.test(drops) && /read !== true/.test(sw)
+    ? ok('an empty snapshot is stored only when the page was actually read')
+    : fail('an empty drop scan cannot be told apart from a failed one');
 
   /*
    * A finished drop has no remaining time, so it must not take a row from a
@@ -726,6 +770,105 @@ console.log('\n[20] Drop progress');
   /id="dpList"/.test(html)
     ? ok('the popup has a progress card')
     : fail('popup.html has no progress card');
+}
+
+console.log('\n[21] Lifecycle and single execution');
+{
+  const swSource = await readFile(join(SRC, 'background/sw.js'), 'utf8');
+
+  /*
+   * One document can get the content scripts twice: the browser injects at
+   * document_idle, and the background injects into any Twitch tab that did not
+   * answer a ping - which a tab that is still loading cannot do. A second pass
+   * registers a second message listener, a second storage listener, a second
+   * route observer with its own interval and a second click budget, and leaves
+   * the first pass's modules running with nothing able to stop them.
+   */
+  {
+    const unguarded = [];
+    let guarded = 0;
+    // The beacon carries its own guard; it is the file that defines this one.
+    const injected = chromeManifest.content_scripts[0].js
+      .filter((f) => f !== 'content/beacon.js');
+    for (const file of injected) {
+      const src = await readFile(join(SRC, file), 'utf8');
+      if (src.includes(`__adtOnce('${file}')`)) guarded++;
+      else unguarded.push(file);
+    }
+    !unguarded.length
+      ? ok(`all ${guarded} injected files refuse to run twice`)
+      : fail('a second injection would run these again: ' + unguarded.join(', '));
+
+    const beacon = await readFile(join(SRC, 'content/beacon.js'), 'utf8');
+    /g\.__adtOnce = function/.test(beacon)
+      ? ok('the beacon supplies the guard')
+      : fail('content/beacon.js does not define __adtOnce');
+  }
+
+  /*
+   * Twitch is a single-page app, so every channel switch stops and restarts
+   * every module. A timer that start() creates and stop() forgets therefore
+   * accumulates one live copy per navigation.
+   */
+  for (const name of ['drops', 'ad-mute', 'channel-points', 'sidebar-watch',
+    'viewer-stats', 'watch-health']) {
+    const src = await readFile(join(SRC, `content/modules/${name}.js`), 'utf8');
+    const started = [...src.matchAll(/state\.(\w*[Tt]imer)\s*=\s*set(?:Interval|Timeout)/g)]
+      .map((m) => m[1]);
+    const cleared = [...src.matchAll(/clear(?:Interval|Timeout)\(state\.(\w+)\)/g)]
+      .map((m) => m[1]);
+    const leaked = [...new Set(started)].filter((t) => !cleared.includes(t));
+    !leaked.length
+      ? ok(`${name}: every timer it starts is cleared`)
+      : fail(`${name}.js never clears: ${leaked.join(', ')}`);
+  }
+
+  /*
+   * Creating an alarm that already exists restarts its countdown. In MV3 the
+   * worker file runs again on every start, which the one-minute health alarm
+   * makes at least a once-a-minute event, so an unconditional create pushed the
+   * drops alarm ten minutes out forever and it never fired.
+   */
+  // Only the repeating ones. The tab-closing alarm is a one-shot with a `when`
+  // and is supposed to be created outright every time.
+  /function ensureAlarm/.test(swSource) && /alarms\.get\(name\)/.test(swSource) &&
+      !/api\.alarms\.create\(ALARM_(?:DROPS|HEALTH)\b/.test(swSource)
+    ? ok('repeating alarms are only rescheduled when their period changed')
+    : fail('sw.js recreates a repeating alarm outright, resetting its countdown');
+
+  /*
+   * The background's runtime records are read-modify-write pairs, and two
+   * Twitch tabs acting at once interleave them: the second write drops the
+   * first one's change. Everything that mutates one goes through the queue.
+   */
+  {
+    const offenders = [];
+    for (const [file, key] of [
+      ['background/sw.js', 'MUTE_RT_KEY'],
+      ['background/watch-health.js', 'RT_KEY'],
+      ['background/live-watch.js', 'RT_KEY']
+    ]) {
+      const src = await readFile(join(SRC, file), 'utf8');
+      if (new RegExp(`[a-z]+\\[${key}\\]\\s*=`).test(src)) offenders.push(`${file}:${key}`);
+    }
+    !offenders.length
+      ? ok('runtime records are written through the serialized updater')
+      : fail('unserialized runtime write in: ' + offenders.join(', '));
+
+    const storageSource = await readFile(join(SRC, 'lib/storage.js'), 'utf8');
+    /g\.ADT\.updateLocal = function/.test(storageSource)
+      ? ok('the serialized updater exists')
+      : fail('lib/storage.js does not expose updateLocal');
+  }
+
+  /*
+   * A handler that returns true has promised a reply. If the promise behind it
+   * rejects the reply never arrives, the port hangs, and the popup - which
+   * turns a dead port into null - renders nothing, with no error anywhere.
+   */
+  /function answerWith/.test(swSource) && !/\)\.then\(sendResponse\);/.test(swSource)
+    ? ok('async message handlers answer even when they fail')
+    : fail('sw.js has a message handler that can leave its port open');
 }
 
 console.log(errors ? `\n${errors} problem(s).\n` : '\nAll clean.\n');

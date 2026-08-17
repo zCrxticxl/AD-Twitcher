@@ -371,9 +371,12 @@
    * longer" at all.
    *
    * @param {*} items Untrusted: this comes from a content script.
+   * @param {*} read Whether the page was read and simply has nothing earnable
+   *     left. Also untrusted, but the worst it can do is clear a snapshot that
+   *     the next scan rebuilds.
    * @return {!Promise<void>}
    */
-  function storeProgress(items) {
+  function storeProgress(items, read) {
     if (!Array.isArray(items)) return Promise.resolve();
 
     var clean = items.filter(function (item) {
@@ -390,7 +393,15 @@
     }).sort(function (a, b) {
       return progressRank(a) - progressRank(b) || remainingMs(a) - remainingMs(b);
     }).slice(0, MAX_PROGRESS_ITEMS);
-    if (!clean.length) return Promise.resolve();
+
+    /*
+     * An empty report is stored only when the content script says it read the
+     * inventory and found nothing that can still be earned. Without that, an
+     * empty list is indistinguishable from a failed scan - a page still
+     * loading, a renamed selector - and erasing a good snapshot over one of
+     * those would be the worse answer.
+     */
+    if (!clean.length && read !== true) return Promise.resolve();
 
     var out = {};
     out[PROGRESS_KEY] = { items: clean, updatedAt: Date.now() };
@@ -477,13 +488,6 @@
     });
   }
 
-  /** @param {!Object} rt @return {!Promise<void>} */
-  function saveMuteRt(rt) {
-    var out = {};
-    out[MUTE_RT_KEY] = rt;
-    return Promise.resolve(api.storage.local.set(out));
-  }
-
   /**
    * Second opinion before unmuting: the browser itself says who muted a tab.
    * Auto-join's muteOnOpen is also an extension mute, which is why the stored
@@ -505,18 +509,24 @@
    * @return {!Promise<!Object>}
    */
   function releaseTabMute(tabId) {
-    return loadMuteRt().then(function (rt) {
-      var key = String(tabId);
-      if (!rt.tabs[key]) return { ok: true, changed: false };
-      delete rt.tabs[key];
+    var key = String(tabId);
+    var wasOurs = false;
 
-      return saveMuteRt(rt)
-        .then(function () { return api.tabs.get(tabId); })
-        .then(function (tab) {
-          if (!mutedByUs(tab)) return { ok: true, changed: false };
-          return Promise.resolve(api.tabs.update(tabId, { muted: false }))
-            .then(function () { return { ok: true, changed: true }; });
-        });
+    return g.ADT.updateLocal(MUTE_RT_KEY, function (rt) {
+      rt.tabs = rt.tabs || {};
+      if (!rt.tabs[key]) return undefined;
+      wasOurs = true;
+      delete rt.tabs[key];
+      return rt;
+    }).then(function () {
+      // Ownership is dropped first and the tab is unmuted second. The other
+      // order leaves a tab we no longer claim still muted if the update fails.
+      if (!wasOurs) return { ok: true, changed: false };
+      return Promise.resolve(api.tabs.get(tabId)).then(function (tab) {
+        if (!mutedByUs(tab)) return { ok: true, changed: false };
+        return Promise.resolve(api.tabs.update(tabId, { muted: false }))
+          .then(function () { return { ok: true, changed: true }; });
+      });
     }).catch(function (e) {
       return { ok: false, error: String(e && e.message) };
     });
@@ -537,10 +547,12 @@
         return { ok: true, changed: false };
       }
       return Promise.resolve(api.tabs.update(tabId, { muted: true }))
-        .then(loadMuteRt)
-        .then(function (rt) {
-          rt.tabs[String(tabId)] = Date.now();
-          return saveMuteRt(rt);
+        .then(function () {
+          return g.ADT.updateLocal(MUTE_RT_KEY, function (rt) {
+            rt.tabs = rt.tabs || {};
+            rt.tabs[String(tabId)] = Date.now();
+            return rt;
+          });
         })
         .then(function () { return { ok: true, changed: true }; });
     }).catch(function (e) {
@@ -574,39 +586,71 @@
 
   /** @param {number} tabId @return {!Promise<*>} */
   function forgetTabMute(tabId) {
-    return loadMuteRt().then(function (rt) {
-      if (!rt.tabs[String(tabId)]) return null;
+    return g.ADT.updateLocal(MUTE_RT_KEY, function (rt) {
+      rt.tabs = rt.tabs || {};
+      if (!rt.tabs[String(tabId)]) return undefined;
       delete rt.tabs[String(tabId)];
-      return saveMuteRt(rt);
+      return rt;
     }).catch(function () {
       return null;
     });
   }
 
   /**
-   * @param {boolean=} force Rebuild the alarms even if the config is unchanged.
+   * Creates an alarm only when it is missing or its period changed.
+   *
+   * Creating an alarm that already exists replaces it, which restarts its
+   * countdown from zero. That matters here because in MV3 this whole file runs
+   * again on every worker start, and the one-minute health alarm guarantees a
+   * worker start at least once a minute. Recreating the drops alarm
+   * unconditionally therefore pushed it ten minutes into the future once a
+   * minute, so it never reached its own delay: the periodic check existed in
+   * the code and never ran. Only the unlock notification and the popup button
+   * were left, which is precisely the case the alarm is the safety net for.
+   *
+   * @param {string} name
+   * @param {!Object} opts Alarm options. `periodInMinutes` is the identity: a
+   *     changed interval is the one reason to restart the countdown.
+   * @return {!Promise<void>}
+   */
+  function ensureAlarm(name, opts) {
+    return Promise.resolve(api.alarms.get(name)).then(function (existing) {
+      if (existing && existing.periodInMinutes === opts.periodInMinutes) return;
+      api.alarms.create(name, opts);
+    }).catch(function () {
+      // A browser that cannot report the alarm still needs one.
+      api.alarms.create(name, opts);
+    });
+  }
+
+  /**
+   * @param {boolean=} force Re-evaluate the alarms even if the config is
+   *     unchanged. Never forces a countdown restart; `ensureAlarm` decides.
    * @return {!Promise<void>}
    */
   function syncAlarms(force) {
     return g.ADT.settings.get().then(function (s) {
       log.setLevel(s.logLevel);
 
-      // Without the signature check every claimed bonus would rebuild the
-      // alarms, which resets their interval.
+      // Without the signature check every claimed bonus would re-evaluate the
+      // alarms, which costs a storage read per counter bump.
       var sig = g.ADT.settings.configSig(s);
       if (!force && sig === lastConfigSig) return;
       lastConfigSig = sig;
 
-      api.alarms.clear(ALARM_DROPS);
-      if (s.enabled && s.drops.enabled && s.drops.autoClaim && s.drops.openInventoryTab) {
-        // Safety net only. The real trigger is the adt:drop-unlocked message.
-        api.alarms.create(ALARM_DROPS, {
-          periodInMinutes: Math.max(15, s.drops.checkIntervalMin),
-          delayInMinutes: 10
-        });
-      }
+      var dropsWanted = s.enabled && s.drops.enabled && s.drops.autoClaim &&
+        s.drops.openInventoryTab;
 
-      api.alarms.create(ALARM_HEALTH, { periodInMinutes: 1 });
+      return Promise.all([
+        dropsWanted
+          // Safety net only. The real trigger is the adt:drop-unlocked message.
+          ? ensureAlarm(ALARM_DROPS, {
+            periodInMinutes: Math.max(15, s.drops.checkIntervalMin),
+            delayInMinutes: 10
+          })
+          : Promise.resolve(api.alarms.clear(ALARM_DROPS)).catch(function () {}),
+        ensureAlarm(ALARM_HEALTH, { periodInMinutes: 1 })
+      ]).then(function () {});
     });
   }
 
@@ -627,6 +671,26 @@
 
   /* ------------------------------------------------------------- messages */
 
+  /**
+   * Answers a message from a promise, and answers even when it rejects.
+   *
+   * A handler that returns `true` promises a reply. If the promise behind it
+   * rejects, the reply never comes, the port stays open until the sender is
+   * torn down, and the popup - whose own send() turns a dead port into `null` -
+   * simply renders nothing, with no error anywhere. A storage read that fails
+   * once should not blank the popup for as long as it stays open.
+   *
+   * @param {!Promise<*>} promise
+   * @param {function(*)} sendResponse
+   * @param {string} what Names the handler in the log.
+   */
+  function answerWith(promise, sendResponse, what) {
+    Promise.resolve(promise).then(sendResponse, function (e) {
+      log.error(what + ': ' + (e && e.message));
+      sendResponse({ ok: false, error: String((e && e.message) || e) });
+    });
+  }
+
   api.runtime.onMessage.addListener(function (msg, sender, sendResponse) {
     if (!msg || !msg.type) return;
 
@@ -638,10 +702,11 @@
         return true;
 
       case 'adt:watch-heartbeat':
-        g.ADT.watchHealth.handleHeartbeat(
-          msg, sender && sender.tab && sender.tab.id).then(function () {
-            sendResponse({ ok: true });
-          });
+        answerWith(
+          g.ADT.watchHealth.handleHeartbeat(
+            msg, sender && sender.tab && sender.tab.id)
+            .then(function () { return { ok: true }; }),
+          sendResponse, 'watch-heartbeat');
         return true;
 
       case 'adt:watch-stopped':
@@ -659,7 +724,7 @@
           sendResponse({ ok: false, error: 'no tab' });
           return true;
         }
-        setTabMuted(muteTabId, !!msg.muted).then(sendResponse);
+        answerWith(setTabMuted(muteTabId, !!msg.muted), sendResponse, 'tab-mute');
         return true;
 
       case 'adt:set-settings':
@@ -683,19 +748,24 @@
         return true;
 
       case 'adt:status':
-        Promise.all([g.ADT.settings.get(), g.ADT.liveWatch.status(), activityStatus()])
-          .then(function (r) {
-            sendResponse({ ok: true, settings: r[0], live: r[1], activity: r[2] });
-          });
+        answerWith(
+          Promise.all([
+            g.ADT.settings.get(), g.ADT.liveWatch.status(), activityStatus()
+          ]).then(function (r) {
+            return { ok: true, settings: r[0], live: r[1], activity: r[2] };
+          }),
+          sendResponse, 'status');
         return true;  // Async response.
 
       case 'adt:drops-check-now':
-        runDropsCheck('popup').then(function () { sendResponse({ ok: true }); });
+        answerWith(runDropsCheck('popup').then(function () { return { ok: true }; }),
+          sendResponse, 'drops-check-now');
         return true;
 
       // Scraped off the inventory page by the content script.
       case 'adt:drops-progress':
-        storeProgress(msg.items).then(function () { sendResponse({ ok: true }); });
+        answerWith(storeProgress(msg.items, msg.read)
+          .then(function () { return { ok: true }; }), sendResponse, 'drops-progress');
         return true;
 
       // Raised by the content script when Twitch shows the unlock notification.
@@ -707,7 +777,8 @@
         return true;
 
       case 'adt:settings-changed':
-        syncAlarms(true).then(function () { sendResponse({ ok: true }); });
+        answerWith(syncAlarms(true).then(function () { return { ok: true }; }),
+          sendResponse, 'settings-changed');
         return true;
 
       case 'adt:bump-stat':
@@ -724,7 +795,9 @@
         return true;
 
       case 'adt:reinject':
-        injectIntoOpenTabs().then(function (r) { sendResponse({ ok: true, result: r }); });
+        answerWith(injectIntoOpenTabs().then(function (r) {
+          return { ok: true, result: r };
+        }), sendResponse, 'reinject');
         return true;
     }
   });

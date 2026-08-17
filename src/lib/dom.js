@@ -22,6 +22,9 @@
    * hides the bug because globalThis === window there.
    */
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('lib/dom.js')) return;
+
   g.ADT = g.ADT || {};
 
   /**

@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "掉落" },
   "dropProgressDone": { "message": "已完成" },
   "dropProgressEmpty": { "message": "尚未读取进度。下次打开掉落库存页面时会获取。" },
+  "dropProgressNone": { "message": "没有进行中的掉宝。库存中的所有活动均已结束或已领取。" },
 
   "btnDropsNow": { "message": "立即检查掉宝" },
   "btnDropsNowBusy": { "message": "正在检查…" },

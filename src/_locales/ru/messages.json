@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "Дроп" },
   "dropProgressDone": { "message": "Готово" },
   "dropProgressEmpty": { "message": "Прогресс ещё не считан. Он берётся со страницы инвентаря дропов при следующем её открытии." },
+  "dropProgressNone": { "message": "Нет активных дропов. Все кампании в инвентаре завершены или уже получены." },
 
   "btnDropsNow": { "message": "Проверить дропы" },
   "btnDropsNowBusy": { "message": "Проверка…" },

@@ -19,6 +19,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : window;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('content/modules/viewer-stats.js')) return;
+
   g.ADT = g.ADT || {};
   g.ADT.modules = g.ADT.modules || {};
   var D = g.ADT.dom;
@@ -348,6 +351,14 @@
 
     D.waitFor(CHAT_ROOTS, 20000).then(function (root) {
       if (!state.running) return;
+      /*
+       * A channel switch stops and restarts this module, and the wait from the
+       * previous pass is still open for up to twenty seconds. Whichever chat
+       * root mounts last would otherwise overwrite the handle to the other
+       * observer, leaving it attached to a busy chat container with nothing
+       * able to disconnect it - one leaked observer per fast channel switch.
+       */
+      if (state.observer) state.observer.disconnect();
       state.observer = D.observe(root || document.body, harvestChat, 500);
     });
 

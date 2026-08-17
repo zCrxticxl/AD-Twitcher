@@ -13,6 +13,9 @@
   'use strict';
 
   var g = typeof globalThis !== 'undefined' ? globalThis : self;
+  // Re-injection must not run this file twice; see content/beacon.js.
+  if (g.__adtOnce && g.__adtOnce('lib/storage.js')) return;
+
   g.ADT = g.ADT || {};
   var api = g.ADT.api;
 
@@ -130,6 +133,12 @@
    */
   var writeQueue = Promise.resolve();
 
+  /**
+   * Storage key to its own pending write chain, for `updateLocal`.
+   * @type {!Object<string, !Promise<*>>}
+   */
+  var localQueues = {};
+
   /** @return {!Promise<!Object>} */
   function get() {
     if (cache) return Promise.resolve(cache);
@@ -208,7 +217,17 @@
         if (!next.trackingSince) next.trackingSince = now;
         next.lastActivityAt = now;
         next.lastAction = key;
-        next[key] = (cur[key] || 0) + (by || 1);
+
+        /*
+         * Both sides are checked for being numbers. `by` arrives from a content
+         * script over a message, and a string turns the addition into a
+         * concatenation: one bad increment leaves "01" in storage and every
+         * later one appends to it, so the counter never recovers.
+         */
+        var step = Number(by);
+        if (!isFinite(step) || step <= 0) step = 1;
+        var prev = Number(cur[key]);
+        next[key] = (isFinite(prev) ? prev : 0) + step;
         var o = {};
         o[STATS_KEY] = next;
         return Promise.resolve(api.storage.local.set(o)).then(function () { return next; });
@@ -275,6 +294,52 @@
     configSig: configSig,
     onChange: function (fn) { listeners.push(fn); },
     deepMerge: deepMerge
+  };
+
+  /**
+   * Serialized read-modify-write for a single storage.local key.
+   *
+   * Everything the background keeps at runtime - which tabs it muted, which it
+   * is watching, which channels it opened for the watchlist - is held as a
+   * plain get/set pair, and those interleave. Two Twitch tabs reporting in the
+   * same moment both read the old value, and the second write silently drops
+   * the first one's change. What that looks like from outside is never an
+   * obvious storage problem: a tab that stays silent after its ad break, a
+   * channel tab that is never closed when the stream ends, a second tab opened
+   * for a stream that is already running. So it is fixed here, on the same
+   * queue the settings writes already use, rather than at each call site.
+   *
+   * @param {string} key
+   * @param {function(!Object): (!Object|!Promise<!Object>|undefined)} mutate
+   *     Receives the stored value, or {} when there is none. Returning
+   *     undefined skips the write, which keeps a no-op from costing one. A
+   *     promise is awaited before the write, so a pass that has to ask the
+   *     browser something mid-decision still ends in a single atomic update.
+   * @return {!Promise<*>} What was written, or undefined when nothing was.
+   */
+  g.ADT.updateLocal = function (key, mutate) {
+    /*
+     * One queue per key rather than the settings queue. Serialization is only
+     * needed against writers of the same key, and sharing one queue across all
+     * of them would mean a mutator that bumps a counter - which auto-join does
+     * while it decides - waits on the update it is running inside.
+     */
+    var prev = localQueues[key] || Promise.resolve();
+    var run = prev.then(function () {
+      return Promise.resolve(api.storage.local.get(key)).then(function (res) {
+        return mutate((res && res[key]) || {});
+      }).then(function (next) {
+        if (next === undefined) return undefined;
+        var o = {};
+        o[key] = next;
+        return Promise.resolve(api.storage.local.set(o)).then(function () {
+          return next;
+        });
+      });
+    });
+    // A failed update must not leave the key's queue rejected forever.
+    localQueues[key] = run.catch(function () {});
+    return run;
   };
 
   /**

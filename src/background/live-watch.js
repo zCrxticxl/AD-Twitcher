@@ -40,16 +40,6 @@
   }
 
   /**
-   * @param {!Object} rt
-   * @return {!Promise<void>}
-   */
-  function saveRt(rt) {
-    var o = {};
-    o[RT_KEY] = rt;
-    return Promise.resolve(api.storage.local.set(o));
-  }
-
-  /**
    * @param {string} login
    * @return {!Promise<?number>} Tab id, or null if the channel is not open.
    */
@@ -86,7 +76,11 @@
           }
         }
         log.info('autoJoin: ' + login + ' went live, tab opened');
-        g.ADT.settings.bumpStat('streamsOpened');   // Background context.
+        // Deliberately not awaited: the counter must not hold up the decision
+        // that opened this tab. Caught so a failed write stays a failed write
+        // rather than an unhandled rejection in the worker.
+        Promise.resolve(g.ADT.settings.bumpStat('streamsOpened'))
+          .catch(function (e) { log.warn('autoJoin counter: ' + (e && e.message)); });
         return tab ? tab.id : null;
       });
     });
@@ -119,7 +113,16 @@
       }).filter(Boolean);
       if (!watch.length) return;
 
-      return loadRt().then(function (rt) {
+      /*
+       * One serialized pass. Two Twitch tabs report within milliseconds of each
+       * other, and read separately they both see the same "not live yet" state:
+       * both open a tab for the same stream, and whichever writes second drops
+       * the other's record of it, so neither tab is ever closed again.
+       */
+      return g.ADT.updateLocal(RT_KEY, function (rt) {
+        rt.liveNow = rt.liveNow || [];
+        rt.openedTabs = rt.openedTabs || {};
+        rt.reports = rt.reports || {};
         var now = Date.now();
         var reportKey = tabId == null ? 'unknown' : String(tabId);
         rt.reports[reportKey] = {
@@ -170,7 +173,7 @@
           rt.liveNow = Array.from(liveSet);
           rt.lastReportAt = now;
           rt.knownCount = knownSet.size;
-          return saveRt(rt);
+          return rt;
         });
       });
     }).catch(function (e) {
@@ -185,7 +188,9 @@
    * @return {!Promise<*>}
    */
   function forgetTab(tabId) {
-    return loadRt().then(function (rt) {
+    return g.ADT.updateLocal(RT_KEY, function (rt) {
+      rt.openedTabs = rt.openedTabs || {};
+      rt.reports = rt.reports || {};
       var changed = false;
       if (rt.reports[String(tabId)]) {
         delete rt.reports[String(tabId)];
@@ -197,7 +202,10 @@
           changed = true;
         }
       });
-      return changed ? saveRt(rt) : null;
+      return changed ? rt : undefined;
+    }).catch(function (e) {
+      // Called from tab teardown, where nothing is waiting on the result.
+      log.warn('live-watch forget: ' + (e && e.message));
     });
   }
 
@@ -211,6 +219,9 @@
         knownCount: rt.knownCount,
         stale: rt.lastReportAt ? (Date.now() - rt.lastReportAt) > STALE_AFTER_MS : true
       };
+    }).catch(function () {
+      // The popup renders the rest of its status rather than nothing at all.
+      return { liveNow: [], watchedOpen: [], lastReportAt: 0, knownCount: 0, stale: true };
     });
   }
 
@@ -218,7 +229,6 @@
     handleReport: handleReport,
     forgetTab: forgetTab,
     status: status,
-    loadRt: loadRt,
-    saveRt: saveRt
+    loadRt: loadRt
   };
 })();

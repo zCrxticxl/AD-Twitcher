@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "Drop" },
   "dropProgressDone": { "message": "Gotowe" },
   "dropProgressEmpty": { "message": "Nie odczytano jeszcze postępu. Zostanie pobrany ze strony ekwipunku dropów przy następnym otwarciu." },
+  "dropProgressNone": { "message": "Żaden drop nie jest w toku. Wszystkie kampanie w ekwipunku zakończyły się lub zostały odebrane." },
 
   "btnDropsNow": { "message": "Sprawdź dropy teraz" },
   "btnDropsNowBusy": { "message": "Sprawdzanie…" },

@@ -1,12 +1,12 @@
 # AD-Twitcher - status and handover
 
-Version 1.0.7, 17 August 2026.
+Version 1.0.7, 17 August 2026. Audited in full on the same day.
 
 ## Verification status
 
 | Layer | State |
 |---|---|
-| `npm test` (syntax, manifests, static checks, 115 logic tests, lifecycle harness) | passing |
+| `npm test` (syntax, manifests, 21 static checks, 152 logic tests, lifecycle harness) | passing |
 | Runtime in Firefox | **partial**, see open items |
 | Runtime in Chrome | **never tested** |
 | Runtime in Opera GX | package loads; 12-locale drop-claim fixture passing; live Twitch pending |
@@ -86,6 +86,85 @@ live Twitch behavior still requires manual browser sessions.
     whole page before the list is capped - capping in document order kept four
     drops that had just started and discarded one at 93 %. Scraped values are
     validated in the background, because they arrive from a content script.
+18. Campaigns that are closed or already collected are gone from the list.
+    Inferring it from the markup was not enough: the channel-link test misses
+    rows that still carry their links, and reported drops nobody could earn any
+    more. Twitch states it in a sentence instead - "Diese Belohnung ist nicht
+    mehr verfügbar." - and the notice describes the whole campaign, not the one
+    card it sits on, so a single occurrence retires the row it belongs to. The
+    wording is matched in all twelve locales, as negated fragments only, since
+    the bare word for "available" is a positive signal in `UNLOCK_WORD` and
+    would flag every running drop.
+
+    The two tests deliberately do not share a safety net. The link heuristic is
+    an inference about markup and keeps its "never filter everything" fallback,
+    because a redesign could make it match all rows. The notice gets none: when
+    every campaign carries it, an empty list is the correct answer. A text
+    matcher fails by going quiet, which only makes the list too long again -
+    the harmless direction - so the net would buy nothing and cost the fix.
+
+    That made the empty snapshot meaningful, and it was being thrown away at
+    both ends. A stored snapshot is only ever replaced, never expired, so
+    without a way to store an empty one the popup kept listing drops from a
+    campaign that closed weeks ago. The content script now reports whether it
+    read the page at all, and only a read page may clear the stored list; a
+    scan that found nothing to go on still leaves it untouched. The popup tells
+    the two states apart by the timestamp and says either "nothing earnable
+    left" (`dropProgressNone`) or "not read yet" (`dropProgressEmpty`).
+
+## Audit pass, 17 August 2026
+
+A full read of the tree rather than a look at what was already suspected. Six
+defects, none of which any existing test could have caught, because each one
+needed a second execution, a second context or a restart to show itself.
+
+19. **The periodic drops check never ran.** Creating an alarm that already
+    exists restarts its countdown, and in MV3 the worker file runs again on
+    every worker start - which the one-minute health alarm guarantees at least
+    once a minute. So the drops alarm was pushed ten minutes into the future
+    once a minute and never reached its own delay. The code was correct on the
+    page and dead in the browser. Alarms now go through `ensureAlarm`, which
+    only writes when the alarm is missing or its period changed, and the
+    harness boots the worker twice on one alarm registry to prove it.
+
+20. **A second injection duplicated everything.** The browser injects content
+    scripts at document_idle, and the background injects into any Twitch tab
+    that did not answer a ping - which a tab that is still loading cannot do.
+    Only `beacon.js` guarded against running twice. A second pass registered a
+    second message listener (so `sendResponse` fired twice), a second storage
+    listener, a second route observer with its own interval and a second click
+    budget - and left the first pass's modules running with nothing holding a
+    reference to stop them. Every injected file now opens with `__adtOnce`.
+    `started` is kept apart from `loaded` on purpose: `loaded` still means
+    "reached its last statement", or the ping stops being a diagnostic.
+
+21. **`drops.stop()` forgot its progress timer.** A channel switch stops and
+    restarts every module, so one interval accumulated per navigation, and all
+    of them resumed reporting the moment the module came back. Check [21] now
+    diffs the timers a module starts against the ones it clears, for all six.
+
+22. **`sidebar-watch` clicked after teardown.** Its expand timer was untracked,
+    so a pending expand fired four seconds after a channel switch and clicked
+    for a module that no longer existed. Tracked and cleared now, and
+    `expandSidebar` checks `running` as well.
+
+23. **Runtime records raced.** Which tabs are muted, which are watched, which
+    channels auto-join opened - each was a plain get/set pair, and two Twitch
+    tabs acting at once interleave them, so the second write drops the first
+    one's change. It never looks like a storage bug: a tab stays silent after
+    its ad, a channel tab is never closed, a second tab opens for a stream
+    already running. `ADT.updateLocal` serializes per key, and the watchdog's
+    whole pass is now one atomic read-decide-write.
+
+24. **A rejected promise could blank the popup.** A handler returning `true`
+    has promised a reply; if its promise rejected, the reply never came, the
+    port hung, and the popup - which turns a dead port into `null` - rendered
+    nothing, with no error anywhere. `answerWith` answers either way.
+
+Smaller: counters coerce their increment, so a bad message cannot leave a
+string in storage that every later bump appends to; the ad recovery reload
+refuses to fire when its cooldown cannot be stored, because without the
+cooldown it is a reload loop; `saveRt`/`saveMuteRt` are gone as dead code.
 
 ## 0.2.0
 

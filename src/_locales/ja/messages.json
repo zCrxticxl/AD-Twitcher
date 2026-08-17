@@ -72,6 +72,7 @@
   "dropUnnamed": { "message": "ドロップ" },
   "dropProgressDone": { "message": "完了" },
   "dropProgressEmpty": { "message": "まだ進捗を読み取っていません。次に Drops インベントリページを開いたときに取得します。" },
+  "dropProgressNone": { "message": "進行中のドロップはありません。インベントリのキャンペーンはすべて終了済みか受け取り済みです。" },
 
   "btnDropsNow": { "message": "ドロップを今すぐ確認" },
   "btnDropsNowBusy": { "message": "確認中…" },

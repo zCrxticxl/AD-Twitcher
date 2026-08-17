@@ -31,6 +31,7 @@
 
   var diag = g.__ADT_DIAG = g.__ADT_DIAG || {};
   diag.loaded = diag.loaded || [];
+  diag.started = diag.started || [];
   diag.errors = diag.errors || [];
   diag.t0 = Date.now();
   diag.listening = false;
@@ -41,6 +42,32 @@
    */
   g.__adtLoaded = function (name) {
     if (diag.loaded.indexOf(name) < 0) diag.loaded.push(name);
+  };
+
+  /**
+   * Called by every file as its first statement, and the file returns when this
+   * says yes.
+   *
+   * One document can receive the content scripts twice. The browser injects
+   * them at document_idle, and the background injects into every Twitch tab
+   * that did not answer a ping - which a tab that is still loading cannot do.
+   * Running the files a second time registers a second message listener (so
+   * sendResponse is called twice), a second storage listener, a second route
+   * observer with its own interval, and a second click budget, while the
+   * modules from the first pass keep their timers and observers with nothing
+   * left holding a reference to stop them.
+   *
+   * Deliberately a separate list from `loaded`, which records files that
+   * reached their last statement: a file that dies halfway must still show up
+   * as not loaded, or the ping stops being a diagnostic.
+   *
+   * @param {string} name Path relative to the extension root.
+   * @return {boolean} True when this file has already run in this document.
+   */
+  g.__adtOnce = function (name) {
+    if (diag.started.indexOf(name) >= 0) return true;
+    diag.started.push(name);
+    return false;
   };
 
   /**
