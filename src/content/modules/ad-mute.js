@@ -78,6 +78,9 @@
   /** @const {number} Prevents a broken Twitch player from causing reload loops. */
   var RECOVERY_RELOAD_COOLDOWN_MS = 120000;
 
+  /** @const {number} A pause this soon after player input belongs to the user. */
+  var USER_INTENT_MS = 1500;
+
   /** @const {string} Survives one page reload in the current Twitch tab. */
   var RECOVERY_RELOAD_KEY = 'adt:last-ad-recovery-reload';
 
@@ -102,7 +105,9 @@
     changedHostPosition: false,
     lastCountdown: '',
     foregroundHandler: null,
-    recoveryTimer: null
+    recoveryTimer: null,
+    lastInputAt: 0,
+    userPaused: false
   };
 
   /** @return {string} 'tab', 'player' or 'none'. */
@@ -298,9 +303,17 @@
    * Twitch occasionally removes every ad marker but leaves the underlying
    * video stalled. First ask the existing video to continue. Then require
    * actual media-time progress; if none arrives, reload once as a last resort.
+   *
+   * The one thing this must never do is fight the user. The recovery runs in
+   * the minute after an ad, which is also the moment a viewer who wanted to
+   * step away pauses - they could not while the ad held the controls. A player
+   * paused after a real input is left exactly where it is: not resumed, not
+   * reloaded. Only a player that was never given a pause keeps the reload as
+   * its last resort.
    */
   function schedulePlaybackRecovery() {
     clearRecoveryTimer();
+    if (state.userPaused) return;
     if (document.visibilityState === 'hidden') return;
 
     var v = video();
@@ -317,6 +330,11 @@
     state.recoveryTimer = setTimeout(function () {
       state.recoveryTimer = null;
       if (!state.running || state.adActive || adMarkerPresent()) return;
+      // A paused player was paused by someone on purpose - the user, or
+      // Twitch holding the frame. Either way a reload cannot repair it, it
+      // would only destroy the pause. The reload is for the player that
+      // claims to be playing but never advances.
+      if (state.userPaused || (video() && video().paused)) return;
       hideStaleTwitchPlaceholder();
 
       var current = video();
@@ -330,6 +348,67 @@
       }
       reloadForRecovery();
     }, 3500);
+  }
+
+  /* ----------------------------------------------- user pause vs. stall */
+
+  /**
+   * @param {?EventTarget} node
+   * @return {boolean} True for anything inside the player.
+   */
+  function inPlayer(node) {
+    if (!node || typeof node.closest !== 'function') return false;
+    try {
+      return !!node.closest(PLAYER_SELECTORS.join(','));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /**
+   * Records intent, narrowly. A click in chat is not permission to stay
+   * paused, so only player clicks and Twitch's own play/pause keys count.
+   *
+   * @param {!Event} ev
+   */
+  function onUserInput(ev) {
+    if (!state.running) return;
+
+    var target = ev.target || {};
+    var tag = target.tagName || '';
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || target.isContentEditable) return;
+
+    if (ev.type === 'keydown') {
+      var key = String(ev.key || '').toLowerCase();
+      if (key !== ' ' && key !== 'spacebar' && key !== 'k') return;
+    } else if (!inPlayer(ev.target)) {
+      return;
+    }
+    state.lastInputAt = Date.now();
+  }
+
+  /**
+   * A pause that follows player input is the user's call. The recovery path
+   * is the only consumer: it must never resume or reload a player this flag
+   * has been set for.
+   *
+   * @param {!Event} ev
+   */
+  function onMediaPause(ev) {
+    if (!state.running) return;
+    var v = ev.target;
+    if (!v || v.tagName !== 'VIDEO') return;
+    if (Date.now() - state.lastInputAt < USER_INTENT_MS) {
+      state.userPaused = true;
+      log.debug('ad recovery: pause looks user-initiated, leaving the player alone');
+    }
+  }
+
+  /** @param {!Event} ev */
+  function onMediaPlay(ev) {
+    if (!state.running) return;
+    // Playback is back, whoever started it. A later stall is repaired again.
+    if (ev.type === 'playing' || ev.type === 'play') state.userPaused = false;
   }
 
   /* --------------------------------------------------------------- mute */
@@ -547,6 +626,16 @@
     window.addEventListener('focus', state.foregroundHandler);
     window.addEventListener('pageshow', state.foregroundHandler);
 
+    // The recovery runs in the minute after an ad, which is exactly when a
+    // viewer who wants to step away pauses. Record which pauses are theirs.
+    state.lastInputAt = 0;
+    state.userPaused = false;
+    document.addEventListener('pause', onMediaPause, true);
+    document.addEventListener('play', onMediaPlay, true);
+    document.addEventListener('playing', onMediaPlay, true);
+    document.addEventListener('pointerdown', onUserInput, true);
+    document.addEventListener('keydown', onUserInput, true);
+
     // Watch the document only for player replacement. The expensive marker
     // checks stay scoped to the player observer.
     state.rootObserver = D.observe(document.documentElement, function () {
@@ -590,6 +679,11 @@
       window.removeEventListener('pageshow', state.foregroundHandler);
       state.foregroundHandler = null;
     }
+    document.removeEventListener('pause', onMediaPause, true);
+    document.removeEventListener('play', onMediaPlay, true);
+    document.removeEventListener('playing', onMediaPlay, true);
+    document.removeEventListener('pointerdown', onUserInput, true);
+    document.removeEventListener('keydown', onUserInput, true);
     if (state.adActive) exitAd(true);
     // Belt and braces: a tab must never stay muted because a module went away.
     if (state.tabMuted) requestTabMute(false);

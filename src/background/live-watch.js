@@ -56,13 +56,15 @@
   /**
    * @param {string} login
    * @param {!Object} cfg settings.autoJoin
-   * @return {!Promise<?number>} Tab id.
+   * @return {!Promise<{id: ?number, opened: boolean}>} `opened` is true only
+   *     when this call created the tab. A tab the user already had open is
+   *     returned for deduplication but is not the extension's to close.
    */
   function openChannel(login, cfg) {
     return tabExistsForChannel(login).then(function (existing) {
       if (existing != null) {
         log.debug('autoJoin: ' + login + ' already open (tab ' + existing + ')');
-        return existing;
+        return { id: existing, opened: false };
       }
       return Promise.resolve(api.tabs.create({
         url: 'https://www.twitch.tv/' + login,
@@ -81,7 +83,7 @@
         // rather than an unhandled rejection in the worker.
         Promise.resolve(g.ADT.settings.bumpStat('streamsOpened'))
           .catch(function (e) { log.warn('autoJoin counter: ' + (e && e.message)); });
-        return tab ? tab.id : null;
+        return { id: tab ? tab.id : null, opened: true };
       });
     });
   }
@@ -147,8 +149,14 @@
 
           if (isLive && !wasLive) {
             chain = chain.then(function () {
-              return openChannel(ch, s.autoJoin).then(function (tabId) {
-                if (tabId != null) rt.openedTabs[ch] = tabId;
+              /*
+               * Only a tab this extension created belongs in `openedTabs`.
+               * Recording a tab the user already had open would hand its
+               * closeWhenOffline path the user's own tab: the stream ends, and
+               * the extension closes a tab the user opened themselves.
+               */
+              return openChannel(ch, s.autoJoin).then(function (r) {
+                if (r.opened && r.id != null) rt.openedTabs[ch] = r.id;
               });
             });
           }

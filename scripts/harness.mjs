@@ -214,6 +214,7 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
   const reloads = [];
   const removes = [];
   const claims = [];
+  const createdTabs = [];
   const alarmHandlers = [];
   let claimReport = null;
   let nextTabId = 99;
@@ -243,7 +244,10 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
         Array.isArray(q.url) ? Object.values(tabs).filter((t) => t.inventory) : []),
       create: () => {
         const id = nextTabId++;
-        tabs[id] = {id};
+        // Marked inventory so later queries can find it, like a real tab whose
+        // url is the inventory page.
+        tabs[id] = {id, inventory: true};
+        createdTabs.push(id);
         return Promise.resolve(tabs[id]);
       },
       // Real Chrome rejects a remove() for an id that is not an open tab -
@@ -338,7 +342,8 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
   vm.runInContext(read('src/background/sw.js'), sandbox);
 
   return {
-    storage, tabs, updates, reloads, removes, claims, alarmCreates, alarmStore,
+    storage, tabs, api, updates, reloads, removes, claims, createdTabs,
+    alarmCreates, alarmStore,
     setClaimReport(report) { claimReport = report; },
     /**
      * The worker answers asynchronously, so the reply is read off the returned
@@ -362,6 +367,206 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
         pending.forEach((fn) => fn());
         await Promise.resolve();
       }
+    }
+  };
+}
+
+/**
+ * Boots background/live-watch.js against stub APIs. updateLocal mirrors
+ * lib/storage.js so the module's own writes behave like production.
+ *
+ * @param {!Object=} storage Shared storage.local backing object.
+ * @param {!Object=} tabs Tab id to tab record.
+ * @param {!Object=} opts nextId for tabs.create.
+ */
+function liveWatchSandbox(storage = {}, tabs = {}, opts = {}) {
+  const localQueues = {};
+  const removes = [];
+  const creates = [];
+  const api = {
+    storage: {
+      local: {
+        get: (key) => Promise.resolve({[key]: storage[key]}),
+        set: (patch) => { Object.assign(storage, patch); return Promise.resolve(); }
+      }
+    },
+    tabs: {
+      query: (q) => Promise.resolve(Object.values(tabs).filter((t) => {
+        const url = q && q.url;
+        if (!t.url || !Array.isArray(url)) return false;
+        return url.some((u) => {
+          const login = u.replace(/^\*:\/\/\*\.twitch\.tv\//, '')
+            .replace(/[?*].*$/, '');
+          return t.url.includes('twitch.tv/' + login);
+        });
+      })),
+      create: (props) => {
+        const id = opts.nextId != null ? opts.nextId++ : 200;
+        const t = {id, ...props};
+        tabs[id] = t;
+        creates.push(t);
+        return Promise.resolve(t);
+      },
+      remove: (id) => { removes.push(id); return Promise.resolve(); },
+      update: () => Promise.resolve()
+    }
+  };
+  const sandbox = {
+    globalThis: null, self: null, console, Promise, Number, Object, Array, String,
+    ADT: {
+      api,
+      log: {debug() {}, info() {}, warn() {}, error() {}},
+      settings: {
+        get: () => Promise.resolve({
+          enabled: true,
+          autoJoin: {
+            enabled: true, channels: ['x'], background: true, muteOnOpen: true,
+            closeWhenOffline: true, pollIntervalSec: 45
+          }
+        }),
+        bumpStat: () => Promise.resolve()
+      },
+      updateLocal(key, mutate) {
+        const run = (localQueues[key] || Promise.resolve())
+          .then(() => api.storage.local.get(key))
+          .then((res) => mutate((res && res[key]) || {}))
+          .then((next) => next === undefined
+            ? undefined
+            : api.storage.local.set({[key]: next}).then(() => next));
+        localQueues[key] = run.catch(() => {});
+        return run;
+      }
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.self = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(read('src/background/live-watch.js'), sandbox);
+  return {sandbox, storage, tabs, removes, creates};
+}
+
+/**
+ * Boots content/modules/ad-mute.js against stubbed DOM. `markers` is the
+ * live ad-marker set the module's selector checks read from.
+ */
+function adMuteSandbox() {
+  let nextTimer = 1;
+  let now = 1000000;
+  const timeouts = new Map();
+  const intervals = new Map();
+  const markers = [];
+  const listeners = new Map();
+  const session = new Map();
+  let reloads = 0;
+  class FakeDate extends Date { static now() { return now; } }
+
+  const video = {
+    tagName: 'VIDEO', isConnected: true, paused: false, ended: false,
+    currentTime: 10, readyState: 4, videoWidth: 1280, videoHeight: 720,
+    volume: 1, muted: false,
+    plays: 0,
+    closest: () => host,
+    play() { this.plays++; this.paused = false; return Promise.resolve(); },
+    addEventListener() {}, removeEventListener() {}
+  };
+  const host = {
+    isConnected: true, style: {position: ''}, querySelector: () => video,
+    appendChild() {}, remove() {}
+  };
+  const listen = (type, fn, capture) => {
+    if (!listeners.has(type)) listeners.set(type, []);
+    listeners.get(type).push({fn, capture});
+  };
+  const unlisten = (type, fn) => {
+    listeners.set(type, (listeners.get(type) || []).filter((x) => x.fn !== fn));
+  };
+  const document = {
+    body: {appendChild() {}},
+    documentElement: {isConnected: true},
+    visibilityState: 'visible',
+    querySelectorAll(sel) {
+      if (sel.indexOf('video-ad-label') >= 0 || sel.indexOf('ad-countdown') >= 0 ||
+          sel.indexOf('advertisement-overlay') >= 0) return markers.slice();
+      return [];
+    },
+    querySelector: () => video,
+    addEventListener: listen, removeEventListener: unlisten
+  };
+  const D = {
+    q: () => null,
+    qAny: () => host,
+    qaAny: () => [],
+    observe: (target, cb) => ({cb, disconnect() {}}),
+    waitFor: () => new Promise(() => {}),
+    isVisible: () => true,
+    isDangerous: () => false,
+    inModal: () => false
+  };
+  const sandbox = {
+    globalThis: null, window: null, document,
+    location: {href: 'https://www.twitch.tv/x', reload() { reloads++; }},
+    sessionStorage: {
+      getItem: (k) => session.get(k) || null,
+      setItem: (k, v) => { session.set(k, String(v)); }
+    },
+    console, Promise, Number, String, Date: FakeDate, Set, WeakSet,
+    Object, Array, JSON, Math,
+    setTimeout(fn) { const id = nextTimer++; timeouts.set(id, fn); return id; },
+    clearTimeout(id) { timeouts.delete(id); },
+    setInterval(fn) { const id = nextTimer++; intervals.set(id, fn); return id; },
+    clearInterval(id) { intervals.delete(id); },
+    getComputedStyle: () => ({display: 'block', visibility: 'visible', opacity: '1'}),
+    addEventListener: listen, removeEventListener: unlisten,
+    ADT: {
+      dom: D, modules: {}, state: {},
+      log: {debug() {}, info() {}, warn() {}, error() {}},
+      msg: (k) => k,
+      send() { return Promise.resolve({ok: true}); },
+      countStat() {}
+    }
+  };
+  sandbox.globalThis = sandbox;
+  sandbox.window = sandbox;
+  vm.createContext(sandbox);
+  vm.runInContext(read('src/content/modules/ad-mute.js'), sandbox);
+  return {
+    sandbox, video, markers, timeouts, intervals,
+    reloads: () => reloads,
+    advance(ms) { now += ms; },
+    fire(type, event) {
+      (listeners.get(type) || []).forEach((h) => h.fn(Object.assign({type}, event)));
+    },
+    /** The real flow: input lands in the player, then Twitch pauses the video. */
+    userPause() {
+      this.fire('pointerdown', {target: video, clientX: 100, clientY: 100});
+      this.video.paused = true;
+      this.fire('pause', {target: video});
+    },
+    startAd() {
+      markers.push({
+        isConnected: true, hidden: false,
+        getAttribute: (n) => (n === 'aria-hidden' ? 'false' : null),
+        getClientRects: () => [{width: 100, height: 20}]
+      });
+      this.advance(300);
+      this.tick();
+      if (this.sandbox.ADT.modules.adMute.isAdActive() !== true) {
+        throw new Error('ad did not start');
+      }
+      markers.length = 0;
+      this.advance(1000);
+      this.tick();
+      if (this.sandbox.ADT.modules.adMute.isAdActive() !== false) {
+        throw new Error('ad did not end');
+      }
+    },
+    tick() {
+      [...intervals.values()].forEach((fn) => fn());
+    },
+    runTimeouts() {
+      const pending = [...timeouts.values()];
+      timeouts.clear();
+      pending.forEach((fn) => fn());
     }
   };
 }
@@ -1175,6 +1380,182 @@ console.log('\n[close-tab alarm lifecycle]');
   await other.settle();
   assert('an alarm naming an id nobody holds touches no real tab',
     !!otherTabs[5] && other.removes.length === 0);
+}
+
+console.log('\n[ad-mute recovery vs. user pause]');
+{
+  /*
+   * The recovery runs in the 3.5s after an ad ends - exactly when a viewer
+   * who could not pause during the ad steps away and pauses. The recovery
+   * must treat that pause as theirs: no play(), no reload.
+   */
+  const h = adMuteSandbox();
+  h.sandbox.ADT.modules.adMute.start({
+    muteTarget: 'tab', overlay: false, graceMs: 200, restoreVolume: true
+  });
+  h.startAd();
+
+  const playsBefore = h.video.plays;
+  h.userPause();
+
+  h.advance(4000);
+  h.runTimeouts();
+  assert('a user pause inside the recovery window triggers no reload',
+    h.reloads() === 0);
+  assert('and is not undone by the recovery play()', h.video.plays === playsBefore);
+  assert('and the player stays paused', h.video.paused === true);
+  h.sandbox.ADT.modules.adMute.stop();
+}
+{
+  /*
+   * Returning to the tab inside the 60s window runs reconcileForeground on
+   * the same paused player. Same contract: the pause stays theirs.
+   */
+  const h = adMuteSandbox();
+  h.sandbox.ADT.modules.adMute.start({
+    muteTarget: 'tab', overlay: false, graceMs: 200, restoreVolume: true
+  });
+  h.startAd();
+
+  const playsBefore = h.video.plays;
+  h.userPause();
+
+  h.fire('focus', {});
+  assert('regaining focus does not undo the user pause', h.video.plays === playsBefore);
+
+  h.advance(4000);
+  h.runTimeouts();
+  assert('the recovery timer does not reload a user-paused player',
+    h.reloads() === 0);
+  h.sandbox.ADT.modules.adMute.stop();
+}
+{
+  /*
+   * The reload keeps its one real job: a player that reports playing but
+   * never advances - no user input involved - is still recovered.
+   */
+  const h = adMuteSandbox();
+  h.sandbox.ADT.modules.adMute.start({
+    muteTarget: 'tab', overlay: false, graceMs: 200, restoreVolume: true
+  });
+  h.startAd();
+
+  h.video.currentTime = 10;
+  h.advance(4000);
+  h.runTimeouts();
+  assert('a stalled (playing, not advancing) player still triggers the reload',
+    h.reloads() === 1);
+  h.sandbox.ADT.modules.adMute.stop();
+}
+
+{
+  /*
+   * The flag must never wedge a later repair: once the user starts playback
+   * again, a genuine stall afterwards is recovered exactly as before.
+   */
+  const h = adMuteSandbox();
+  h.sandbox.ADT.modules.adMute.start({
+    muteTarget: 'tab', overlay: false, graceMs: 200, restoreVolume: true
+  });
+  h.startAd();
+  h.userPause();
+  h.video.paused = false;
+  h.fire('playing', {target: h.video});
+  h.advance(4000);
+  h.runTimeouts();
+  assert('a later stall after the user resumed is still recovered',
+    h.reloads() === 1);
+  h.sandbox.ADT.modules.adMute.stop();
+}
+
+console.log('\n[autoJoin tab ownership]');
+{
+  /*
+   * closeWhenOffline may only ever close a tab autoJoin opened itself. A
+   * tab the user already had open is used for deduplication, never recorded
+   * as one of ours, and never closed when the stream ends.
+   */
+  const storage = {};
+  const tabs = {
+    1: {id: 1, url: 'https://www.twitch.tv/x'}
+  };
+  const h = liveWatchSandbox(storage, tabs);
+  const lw = h.sandbox.ADT.liveWatch;
+
+  await lw.handleReport(['x'], ['x'], 2);
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert('a tab the user already had open is not recorded as one of ours',
+    !storage.runtime || storage.runtime.openedTabs.x == null);
+  assert('and no second tab is created for it', h.creates.length === 0);
+
+  await lw.handleReport([], ['x'], 2);
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert('the channel going offline does not close the user\'s own tab',
+    h.removes.length === 0);
+}
+{
+  const storage = {};
+  const tabs = {};
+  const h = liveWatchSandbox(storage, tabs, {nextId: 300});
+  const lw = h.sandbox.ADT.liveWatch;
+
+  await lw.handleReport(['x'], ['x'], 2);
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert('a channel with no tab open gets one created by autoJoin',
+    h.creates.length === 1);
+  assert('and that tab is recorded for the closeWhenOffline path',
+    !!storage.runtime && storage.runtime.openedTabs.x === h.creates[0].id);
+
+  await lw.handleReport([], ['x'], 2);
+  await new Promise((r) => setImmediate(r));
+  await new Promise((r) => setImmediate(r));
+  assert('the channel going offline closes the tab autoJoin opened',
+    h.removes.length === 1 && h.removes[0] === h.creates[0].id);
+}
+
+console.log('\n[inventory tab open race]');
+{
+  /*
+   * Two channel tabs can see the same unlock toast within a second, and both
+   * report it. The query-then-create open must not run twice: one inventory
+   * tab, one close-tab alarm.
+   */
+  const h = swSandbox({}, {}, {});
+  h.send({type: 'adt:drop-unlocked', text: 'Drop unlocked!'}, 1);
+  h.send({type: 'adt:drop-unlocked', text: 'Drop unlocked!'}, 2);
+  await h.settle();
+  assert('two unlock reports open one inventory tab', h.createdTabs.length === 1);
+}
+{
+  const h = swSandbox({}, {}, {});
+  h.send({type: 'adt:drop-unlocked', text: 'Drop unlocked!'}, 1);
+  h.send({type: 'adt:drops-check-now'}, 2);
+  await h.settle();
+  assert('an unlock racing a popup check still opens one inventory tab',
+    h.createdTabs.length === 1);
+}
+{
+  /*
+   * If api.tabs.create ever throws synchronously, the open latch must still
+   * be released - a stuck latch would silently turn every later inventory
+   * open into 'idle' until the worker restarts. The next check after the
+   * failed open must work normally.
+   */
+  const h = swSandbox({}, {}, {});
+  const realCreate = h.api.tabs.create;
+  h.api.tabs.create = () => { throw new Error('sync boom'); };
+  h.send({type: 'adt:drops-check-now'}, 1);
+  await h.settle();
+  assert('a synchronous tabs.create throw does not leave the open latch stuck',
+    h.createdTabs.length === 0);
+  h.api.tabs.create = realCreate;
+  h.send({type: 'adt:drops-check-now'}, 2);
+  await h.settle();
+  assert('the check after the failed open still opens an inventory tab',
+    h.createdTabs.length === 1);
 }
 
 console.log(failures ? `\n${failures} harness failure(s).\n` : '\nLifecycle harness clean.\n');

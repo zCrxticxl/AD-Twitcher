@@ -168,6 +168,16 @@
   var lastInventoryReload = {};
 
   /**
+   * True while an inventory tab open is in flight. The check is query-then-
+   * create, and a drop unlock can arrive from two channel tabs in the same
+   * second: both queries resolve empty, and both open a tab. In memory is
+   * enough, a restart in the milliseconds between query and create costs one
+   * duplicate tab at most - the same as before this guard.
+   * @type {boolean}
+   */
+  var inventoryOpenPending = false;
+
+  /**
    * @param {number} tabId
    * @param {number=} timeoutMs
    * @return {!Promise<void>} Resolves when the tab finished loading, or on
@@ -444,9 +454,42 @@
       return Promise.resolve(api.tabs.query({
         url: ['*://*.twitch.tv/drops/inventory', '*://*.twitch.tv/drops/inventory?*']
       })).then(function (tabs) {
-        var run = (tabs && tabs.length)
-          ? claimInOpenInventory(tabs[0], s)
-          : openInventoryTab(s);
+        var run;
+        if (tabs && tabs.length) {
+          run = claimInOpenInventory(tabs[0], s);
+        } else if (inventoryOpenPending) {
+          log.debug('drops: inventory tab open already in flight');
+          /*
+           * This run did nothing and the other run records its own truthful
+           * outcome; overwriting it with 'idle' here would say "opened
+           * nothing" right after a tab was actually opened.
+           */
+          return Promise.resolve();
+        } else {
+          /*
+           * Two unlock reports - two channel tabs saw the same toast within a
+           * second - must not open two inventory tabs. The latch spans only
+           * the query-to-create gap; once the tab exists, the query above
+           * finds it.
+           */
+          inventoryOpenPending = true;
+          /*
+           * openInventoryTab evaluates api.tabs.create() before its promise
+           * chain starts. If that call throws synchronously the latch would
+           * never be cleared, so the open itself is deferred onto a promise
+           * tick: a synchronous throw becomes a rejection, and the handlers
+           * below release the latch either way.
+           */
+          run = Promise.resolve().then(function () {
+            return openInventoryTab(s);
+          }).then(function (outcome) {
+            inventoryOpenPending = false;
+            return outcome;
+          }, function (e) {
+            inventoryOpenPending = false;
+            throw e;
+          });
+        }
         return run.then(function (outcome) {
           return noteDropsCheck(outcome || 'idle', how);
         });
