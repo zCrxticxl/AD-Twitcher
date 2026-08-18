@@ -6,8 +6,3 @@ web-ext-artifacts/
 .DS_Store
 .env
 .env.*
-
-# AI workspace: content lives outside the repo, symlinked in for tooling only
-.agents
-.ai-local
-docs/ai
