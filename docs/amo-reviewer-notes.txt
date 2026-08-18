@@ -1,0 +1,28 @@
+Notes for the reviewer - AD-Twitcher 1.0.8
+
+Permissions:
+- storage: settings, activity log, drop progress - all local
+- tabs: check for already-open channel/inventory tabs
+- alarms: periodic checks
+- notifications: "stream may be stalled" watchdog
+- *://*.twitch.tv/*: all functionality runs on Twitch pages only
+- Firefox uses a persistent background page.
+
+Data handling:
+- No telemetry, no analytics, no remote servers, no third-party requests.
+- Everything stays in browser.storage.local on the user's device.
+
+How to verify the 1.0.8 changes:
+1. Drops inventory (twitch.tv/drops/inventory): every running drop shows a
+   progress bar; finished drops are marked, not ranked.
+2. Popup: toggling a switch must stick without flickering back.
+3. Ad recovery: after an ad ends, pausing manually within about 3.5 seconds
+   must not reload the tab and must keep the player paused; a stalled (never
+   paused) player is still recovered by one reload.
+4. Auto-join: a tab the user opened themselves is never closed when the
+   stream ends.
+5. Drops: simultaneous unlocks open exactly one inventory tab.
+
+Source:
+- Unminified, in the src/ folder; node build.mjs --zip reproduces the
+  packaged zip.
