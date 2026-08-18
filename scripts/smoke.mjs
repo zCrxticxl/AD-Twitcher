@@ -668,6 +668,126 @@ function evalFragment(source, pattern, tail, context = {}) {
     goneAmongLive.items.map((x) => x.name), ['Rare 2']);
 }
 
+/* --------------------- drops: retirement notice matched per locale, both ways */
+{
+  /*
+   * The retirement notice is the load-bearing signal, and Twitch renders it in
+   * the viewer's language. A table entry that is the wrong fragment - the old
+   * bug had the French/Italian/Portuguese "plus disponible" family, which means
+   * "more available" - silently hides nothing, it hides *live* campaigns, and
+   * only in the languages whose entry is broken. So the table is read out of
+   * the production source and run through the production matcher in both
+   * directions: every listed fragment must match a sentence Twitch would
+   * actually print, and a live-meaning sentence must not match anything.
+   */
+  const src = read('src/content/modules/drops.js');
+  const table = evalFragment(
+    src,
+    /var UNAVAILABLE_TEXTS_BY_LOCALE = \{[\s\S]*?\n\s*\};/,
+    'UNAVAILABLE_TEXTS_BY_LOCALE;');
+  // The production table flattened the same way UNAVAILABLE_TEXTS is built.
+  const texts = Object.values(table).flat();
+  // The exact production matching step, applied to the production table:
+  // lowercase the block text, then a substring scan over every fragment.
+  const retired = (text) =>
+    texts.some((fragment) => text.toLowerCase().indexOf(fragment) >= 0);
+
+  // Sentences Twitch prints on a reward that can no longer be earned, in each
+  // of the 12 shipped locales. The second and third entries per locale carry
+  // the ASCII fallback spellings (no accents) Twitch serves when the user's
+  // font or the page encoding drops them - the same variants the production
+  // table lists. Together they cover every listed fragment at least once.
+  const retiredNotice = {
+    en: ['this reward is no longer available'],
+    de: ['diese Belohnung ist nicht mehr verfügbar',
+      'diese Belohnung ist nicht mehr verfuegbar'],
+    es: ['esta recompensa ya no está disponible',
+      'esta recompensa ya no esta disponible'],
+    fr: ['cette récompense n’est plus disponible',
+      'cette récompense n\'est plus disponible',
+      'cette récompense nest plus disponible'],
+    it: ['questa ricompensa non è più disponibile',
+      'questa ricompensa non e più disponibile',
+      'questa ricompensa non e piu disponibile'],
+    pt_BR: ['esta recompensa não está mais disponível',
+      'esta recompensa nao esta mais disponivel'],
+    pl: ['ta nagroda nie jest już dostępn',
+      'ta nagroda nie jest juz dostepna',
+      'ta nagroda jest niedostępna'],
+    ru: ['эта награда больше недоступна',
+      'эта награда больше не доступна'],
+    tr: ['bu ödül artık kullanılamıyor',
+      'bu ödül artik kullanilamiyor',
+      'bu ödül artık mevcut değil'],
+    ja: ['この報酬は利用できなくなりました'],
+    ko: ['이 보상은 더 이상 사용할 수 없습니다'],
+    zh_CN: ['此奖励不再可用', '此奖励已不可用']
+  };
+
+  // A sentence that still means "available", in each locale. The old bug's
+  // strings matched these and hid the campaigns that print them.
+  const liveSentence = {
+    en: 'this reward is available in your region',
+    de: 'diese Belohnung ist verfügbar',
+    es: 'esta recompensa está disponible',
+    fr: 'cette récompense est plus disponible que jamais',
+    it: 'questa ricompensa è più disponibile di prima',
+    pt_BR: 'esta recompensa está mais disponível do que nunca',
+    pl: 'ta nagroda jest dostępna',
+    ru: 'эта награда доступна',
+    tr: 'bu ödül mevcut',
+    ja: 'この報酬は利用できます',
+    ko: '이 보상은 사용할 수 있습니다',
+    zh_CN: '此奖励可用'
+  };
+
+  console.log('\n[retirement notice per locale]');
+  const locales = Object.keys(retiredNotice);
+  // Deleting or misspelling a locale key in production must fail here, and a
+  // locale added to the table must not be forgotten by the test sentences.
+  eq('test locales match the production table exactly',
+    Object.keys(table).sort(), locales.slice().sort());
+  eq('every shipped locale has a retirement phrase and a live phrase',
+    locales.filter((l) => !(l in liveSentence)), []);
+  const retiredSentences = Object.values(retiredNotice).flat();
+  retiredSentences.forEach((sentence, i) =>
+    eq(`retired sentence ${i} is matched`,
+      retired(sentence), true));
+  locales.forEach((locale) =>
+    eq(`${locale} live sentence stays earnable`,
+      retired(liveSentence[locale]), false));
+
+  // Every listed fragment, not just the primary one per locale: each entry
+  // must match a sentence Twitch would print with that wording. The matcher
+  // lowercases only the page text, so a fragment that is not lowercase itself
+  // can never match and must be caught here.
+  const fragments = Object.entries(table).flatMap(([locale, list]) =>
+    list.map((fragment) => ({ locale, fragment })));
+  eq('every fragment is a non-empty string',
+    fragments.filter((x) => typeof x.fragment !== 'string' || !x.fragment.trim())
+      .map((x) => x.locale), []);
+  eq('every fragment is lowercase (the matcher lowercases only the text)',
+    fragments.filter((x) => x.fragment !== x.fragment.toLowerCase())
+      .map((x) => x.fragment), []);
+  eq('every listed fragment matches a sentence Twitch would print',
+    fragments.filter((x) =>
+      !retiredSentences.some((sentence) =>
+        sentence.toLowerCase().indexOf(x.fragment) >= 0))
+      .map((x) => `${x.locale}:${x.fragment}`), []);
+
+  // The fragments are matched by substring, so a listed fragment must not be
+  // a substring of a positive sentence in the same language family. These are
+  // the exact traps the 2026-08-17 review report named.
+  eq('fr "plus disponible" does not retire (review trap)',
+    retired('cette récompense est plus disponible que jamais'), false);
+  eq('it "più disponibile" does not retire (review trap)',
+    retired('questa ricompensa è più disponibile di prima'), false);
+  eq('pt_BR "mais disponível" does not retire (review trap)',
+    retired('esta recompensa está mais disponível do que nunca'), false);
+  eq('en generic "not available" is not matched anywhere',
+    texts.every((t) => t !== 'not available'), true);
+}
+
 /* ------------------------------------------- ad-mute: stale marker handling */
 {
   const src = read('src/content/modules/ad-mute.js');
