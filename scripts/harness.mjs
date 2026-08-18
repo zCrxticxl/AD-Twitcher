@@ -455,6 +455,33 @@ console.log('\n[lifecycle harness]');
   h.sandbox.ADT.modules.watchHealth.stop();
 }
 {
+  // Twitch's current chat input is a contenteditable div (data-a-target
+  // "chat-input"), not a textarea. A space typed there must not count as a
+  // pause command either, or a stall right after typing is never recovered.
+  const h = watchContentSandbox();
+  h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
+  h.fire('keydown', {key: ' ', target: {tagName: 'DIV', isContentEditable: true}});
+  h.video.paused = true;
+  h.fire('pause', {target: h.video});
+  h.runTimeouts();
+  assert('space in the contenteditable chat input is not a pause command',
+    h.video.plays === 1);
+  h.sandbox.ADT.modules.watchHealth.stop();
+}
+{
+  // The keydown can land on any descendant of the chat editor - a span inside
+  // it inherits isContentEditable from the host, so the same guard has to fire.
+  const h = watchContentSandbox();
+  h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
+  h.fire('keydown', {key: 'k', target: {tagName: 'SPAN', isContentEditable: true}});
+  h.video.paused = true;
+  h.fire('pause', {target: h.video});
+  h.runTimeouts();
+  assert('a key inside the chat editor is not a pause command either',
+    h.video.plays === 1);
+  h.sandbox.ADT.modules.watchHealth.stop();
+}
+{
   const h = watchContentSandbox();
   h.sandbox.ADT.modules.watchHealth.start({heartbeatSec: 30, keepPlaying: true});
   h.fire('keydown', {key: ' '});              // User pauses
