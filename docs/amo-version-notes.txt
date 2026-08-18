@@ -1,0 +1,13 @@
+AD-Twitcher 1.0.8
+
+What's new:
+- Drops inventory rework: every running drop shows a progress bar in the popup; finished drops are shown as markers, and the list reaches the actual running campaign.
+- The popup now re-syncs its controls when a settings write fails (e.g. background restart) - no more toggle that flips back.
+- The popup's "check now" button also refreshes the drop figures.
+
+Fixes:
+- After an ad ends, playback recovery now recognizes a pause made on purpose and leaves the player alone (no auto-resume, no tab reload). A genuinely stalled player is still recovered with one guarded reload.
+- Auto-join only closes tabs the extension opened itself - tabs you opened yourself are never closed when the stream ends.
+- Two channels unlocking a drop at the same time open only one inventory tab.
+
+No new permissions, no data collection - all data stays on your device.
