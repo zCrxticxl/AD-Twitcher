@@ -1,6 +1,6 @@
 {
   "name": "ad-twitcher",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "private": true,
   "description": "Twitch browser extension: channel points, drops, auto-join, ad mute, viewer metrics.",
   "author": "zCrxticxl",
