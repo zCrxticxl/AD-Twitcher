@@ -8,7 +8,7 @@ AD-Twitcher provides local Twitch viewing utilities that automate the claiming o
 
 ### storage
 
-Stores user settings, local activity counters, diagnostic logs, watched channel names and measured viewer activity. The data remains on the user's device and is not transmitted by the extension.
+Stores user settings, local activity counters, watched channel names and measured viewer activity. Diagnostic logs remain in memory only. The data remains on the user's device and is not transmitted by the extension.
 
 ### tabs
 
@@ -39,13 +39,19 @@ Firefox uses the same `storage`, `tabs`, `alarms`, `notifications` and Twitch ho
 Opera GX uses the same Manifest V3 package and the same `storage`, `tabs`,
 `alarms`, `scripting`, `notifications` and Twitch host-access purposes described for Chrome.
 
+## Microsoft Edge permissions
+
+Microsoft Edge uses the exact Chrome Manifest V3 package and therefore the same
+`storage`, `tabs`, `alarms`, `scripting`, `notifications` and Twitch host-access
+purposes described for Chrome.
+
 ## Remote code declaration
 
 No. AD-Twitcher does not download or execute remote code. All executable code is included in the submitted package as readable JavaScript.
 
 ## Data-use declaration
 
-AD-Twitcher does not collect or transmit user data. Settings, watched channel names, counters, diagnostic logs and activity measurements are processed and stored locally only. No analytics, advertising SDKs, tracking technologies or external APIs are used.
+AD-Twitcher does not collect or transmit user data. Settings, watched channel names, counters and activity measurements are processed and stored locally only; diagnostic logs remain in memory. No analytics, advertising SDKs, tracking technologies or external APIs are used.
 
 ## Reviewer test notes
 

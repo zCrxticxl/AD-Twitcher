@@ -1,7 +1,7 @@
 # AD-Twitcher
 
-Twitch browser extension. Chrome and Opera GX MV3 plus Firefox MV2 from a
-single codebase.
+Twitch browser extension. Chrome, Microsoft Edge and Opera GX MV3 plus Firefox
+MV2 from a single codebase.
 Plain JavaScript, no bundler, no runtime dependencies.
 
 ## Preview
@@ -84,15 +84,22 @@ stays honest after the service worker has been terminated and restarted.
 ## Build and install
 
 ```bash
-node build.mjs              # dist/chrome, dist/firefox and dist/opera
+node build.mjs              # dist/chrome, dist/edge, dist/firefox and dist/opera
 node build.mjs chrome       # one target only
+node build.mjs edge         # Microsoft Edge, reusing the Chrome MV3 source
 node build.mjs opera        # Opera GX only
-node build.mjs --zip        # plus zip archives in dist/
+node build.mjs --zip        # deterministic archives and SHA256SUMS in release/
 npm test                    # syntax, manifests, logic and locale checks
+npm run verify              # tests, policy checks and reproducible packaging
+npm run release:dry-run     # complete local release simulation, no publishing
 ```
 
-**Chrome, Edge, Brave:** `chrome://extensions`, enable developer mode, "Load
+**Chrome and Brave:** `chrome://extensions`, enable developer mode, "Load
 unpacked", pick `dist/chrome`.
+
+**Microsoft Edge:** `edge://extensions`, enable developer mode, "Load unpacked",
+pick `dist/edge`. This output is intentionally byte-equivalent to Chrome where
+the stores consume the same Manifest V3 package.
 
 **Firefox:** `about:debugging#/runtime/this-firefox`, "Load Temporary Add-on",
 pick `dist/firefox/manifest.json`. Temporary add-ons do not survive a restart.
@@ -102,6 +109,17 @@ Edition with `xpinstall.signatures.required=false`.
 **Opera GX:** open `opera:extensions`, enable developer mode, click "Load
 unpacked", and pick `dist/opera`. The Opera GX build is a dedicated package
 that uses the same Manifest V3 code and permissions as Chrome.
+
+### Releases
+
+`npm run version:set -- X.Y.Z` updates `package.json`, `package-lock.json` and
+all three source manifests together. `npm run release:dry-run` then checks source
+policy, permissions, package contents, ZIP path safety, checksums and
+reproducibility without making network requests or reading store credentials.
+
+Pushing an exact `vX.Y.Z` tag triggers the protected release workflow. See
+[`docs/RELEASING.md`](docs/RELEASING.md) for the operator procedure and the
+store setup guides under [`docs/`](docs).
 
 ## What works, and what cannot
 
@@ -229,6 +247,7 @@ src/
   background/ sw.js (entry point, alarms, router) · live-watch.js
   popup/      popup.html/css/js
 scripts/      check.mjs (static checks) · smoke.mjs (logic tests)
+              release-check.mjs (archive and security verification)
 build.mjs
 ```
 

@@ -6,110 +6,92 @@
  */
 
 /**
- * @fileoverview Build script. Copies src/ to dist/<target>/ and drops the
- * matching manifest in place. No bundler and no transpiler: the extension ships
- * as plain ES5-compatible JavaScript.
- *
- *   node build.mjs                 all targets
- *   node build.mjs chrome          Chrome only
- *   node build.mjs firefox --zip   Firefox plus a zip in dist/
- *   node build.mjs opera --zip     Opera GX plus a zip in dist/
+ * @fileoverview Copies the shared source tree to each browser-specific output.
+ * Edge deliberately reuses the audited Chrome MV3 manifest and source files.
  */
-import { cp, rm, mkdir, readFile, writeFile, readdir, stat } from 'node:fs/promises';
+import { cp, lstat, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import {
+  RELEASE_TARGETS,
+  TARGET_MANIFEST,
+  createDeterministicZip,
+  sha256File
+} from './scripts/release-lib.mjs';
 
-const execFileP = promisify(execFile);
 const ROOT = dirname(fileURLToPath(import.meta.url));
 const SRC = join(ROOT, 'src');
 const DIST = join(ROOT, 'dist');
-
-const TARGETS = ['chrome', 'firefox', 'opera'];
+const RELEASE = join(ROOT, 'release');
 const args = process.argv.slice(2);
 const wantZip = args.includes('--zip');
-const picked = args.filter((a) => TARGETS.includes(a));
-const targets = picked.length ? picked : TARGETS;
-
-/** Build inputs that must not end up in the output. */
-const SKIP = new Set(TARGETS.map((target) => `manifest.${target}.json`));
+const unknown = args.filter((arg) => arg !== '--zip' && !RELEASE_TARGETS.includes(arg));
+const picked = args.filter((arg) => RELEASE_TARGETS.includes(arg));
+const targets = picked.length ? [...new Set(picked)] : RELEASE_TARGETS;
+const SKIP = new Set(Object.values(TARGET_MANIFEST));
 SKIP.add('icon512.png');
 
-/*
- * Absolute, because PATH is not to be trusted for this one. Git Bash puts GNU
- * tar in front of the Windows build, and GNU tar has no -a and cannot write a
- * ZIP at all, so `--zip` silently produced nothing when the build ran there.
- */
-const WIN_TAR = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
-
-async function zipDirectory(source, destination) {
-  if (process.platform === 'win32') {
-    const entries = await readdir(source);
-    await execFileP(WIN_TAR, ['-a', '-c', '-f', destination, ...entries], { cwd: source });
-    const { stdout } = await execFileP(WIN_TAR, ['-t', '-f', destination]);
-    const invalid = stdout.split(/\r?\n/).filter((entry) =>
-      entry.includes('\\') || entry.startsWith('/') || entry.split('/').includes('..'));
-    if (invalid.length) throw new Error(`Invalid ZIP paths: ${invalid.join(', ')}`);
-    return;
-  }
-
-  await execFileP('zip', ['-qr', destination, '.'], { cwd: source });
+if (unknown.length) {
+  console.error(`Unknown build argument(s): ${unknown.join(', ')}`);
+  process.exit(1);
 }
 
 async function copyTree(from, to) {
   await mkdir(to, { recursive: true });
-  for (const entry of await readdir(from)) {
+  for (const entry of (await readdir(from)).sort()) {
     if (SKIP.has(entry)) continue;
     const source = join(from, entry);
     const target = join(to, entry);
-    if ((await stat(source)).isDirectory()) await copyTree(source, target);
-    else await cp(source, target);
+    const info = await lstat(source);
+    if (info.isDirectory()) await copyTree(source, target);
+    else if (info.isFile()) await cp(source, target);
+    else throw new Error(`Unsupported build input: ${relative(ROOT, source)}`);
   }
 }
 
 async function countFiles(dir) {
   let files = 0;
   for (const entry of await readdir(dir)) {
-    const p = join(dir, entry);
-    if ((await stat(p)).isDirectory()) files += await countFiles(p);
+    const path = join(dir, entry);
+    if ((await stat(path)).isDirectory()) files += await countFiles(path);
     else files++;
   }
   return files;
 }
 
-async function buildTarget(target) {
+async function buildTarget(target, version) {
   const out = join(DIST, target);
   await rm(out, { recursive: true, force: true });
   await copyTree(SRC, out);
 
-  const manifest = JSON.parse(await readFile(join(SRC, `manifest.${target}.json`), 'utf8'));
-
-  // Mirror the version from package.json so there is a single source of truth.
-  const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
-  manifest.version = pkg.version;
-
-  await writeFile(join(out, 'manifest.json'), JSON.stringify(manifest, null, 2) + '\n');
+  const manifestPath = join(SRC, TARGET_MANIFEST[target]);
+  const manifestText = await readFile(manifestPath, 'utf8');
+  const manifest = JSON.parse(manifestText);
+  if (manifest.version !== version) {
+    throw new Error(`${TARGET_MANIFEST[target]} is v${manifest.version}; package.json is v${version}`);
+  }
+  await writeFile(join(out, 'manifest.json'), manifestText);
 
   const locales = existsSync(join(out, '_locales'))
     ? (await readdir(join(out, '_locales'))).length
     : 0;
-  const files = await countFiles(out);
-
   console.log(`  ${target.padEnd(8)} -> dist/${target}  ` +
-    `(${files} files, ${locales} locales, v${manifest.version})`);
+    `(${await countFiles(out)} files, ${locales} locales, v${version})`);
 
-  if (!wantZip) return;
+  if (!wantZip) return null;
+  const archive = join(RELEASE, `ad-twitcher-${target}-v${version}.zip`);
+  await createDeterministicZip(out, archive);
+  console.log(`  ${''.padEnd(8)}    ${relative(ROOT, archive)}`);
+  return archive;
+}
 
-  const zipPath = join(DIST, `ad-twitcher-${target}-v${manifest.version}.zip`);
-  await rm(zipPath, { force: true });
-  try {
-    await zipDirectory(out, zipPath);
-    console.log(`  ${''.padEnd(8)}    ${zipPath.replace(ROOT + '/', '')}`);
-  } catch {
-    console.warn('  (zip not found, archive skipped)');
+async function writeChecksums(archives) {
+  const lines = [];
+  for (const archive of archives.sort((a, b) => a.localeCompare(b))) {
+    lines.push(`${await sha256File(archive)}  ${archive.split(/[\\/]/).pop()}`);
   }
+  await writeFile(join(RELEASE, 'SHA256SUMS'), lines.join('\n') + '\n');
 }
 
 if (!existsSync(SRC)) {
@@ -117,6 +99,19 @@ if (!existsSync(SRC)) {
   process.exit(1);
 }
 
+const pkg = JSON.parse(await readFile(join(ROOT, 'package.json'), 'utf8'));
+if (!picked.length) await rm(DIST, { recursive: true, force: true });
+await mkdir(DIST, { recursive: true });
+if (wantZip) {
+  await rm(RELEASE, { recursive: true, force: true });
+  await mkdir(RELEASE, { recursive: true });
+}
+
 console.log('AD-Twitcher build');
-for (const t of targets) await buildTarget(t);
+const archives = [];
+for (const target of targets) {
+  const archive = await buildTarget(target, pkg.version);
+  if (archive) archives.push(archive);
+}
+if (wantZip) await writeChecksums(archives);
 console.log('done.');

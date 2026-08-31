@@ -56,7 +56,12 @@ async function walk(dir, filter, acc = []) {
 }
 
 console.log('\n[1] JavaScript syntax');
-for (const f of await walk(SRC, (e) => e.endsWith('.js'))) {
+const syntaxFiles = [
+  ...await walk(SRC, (entry) => entry.endsWith('.js')),
+  ...await walk(join(ROOT, 'scripts'), (entry) => entry.endsWith('.mjs')),
+  join(ROOT, 'build.mjs')
+];
+for (const f of syntaxFiles) {
   const rel = f.replace(ROOT + '/', '');
   try {
     await execFileP(process.execPath, ['--check', f]);
@@ -572,8 +577,8 @@ console.log('\n[18] Version badge');
 {
   /*
    * A version printed into the markup is a version that goes stale on the next
-   * release. The badge has to read the manifest, which build.mjs stamps from
-   * package.json, so what the popup shows is what is installed.
+   * release. The badge has to read the synchronized source manifest, so what
+   * the popup shows is what is installed.
    */
   const html = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
   const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');

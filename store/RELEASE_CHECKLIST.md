@@ -1,8 +1,8 @@
-# AD-Twitcher 1.0.7 release checklist
+# AD-Twitcher release checklist
 
 ## Package
 
-- [x] Version set to 1.0.7
+- [ ] Version set with `npm run version:set -- X.Y.Z`
 - [x] Stable Firefox ID set to `ad-twitcher@zcrxticxl`
 - [x] English and German store copy prepared
 - [x] Permission declarations prepared
@@ -10,15 +10,14 @@
 - [x] Support contact prepared
 - [x] Enable GitHub Pages from the `docs/` folder
 - [x] Confirm the public privacy URL loads
-- [x] Create privacy-safe store screenshots with representative sample data
-- [ ] Refresh the screenshots: the status tab gained the activity and drop
-      progress cards, and the footer now shows the version
-- [ ] Upload Chrome ZIP to the Chrome Web Store
-- [ ] Upload Firefox ZIP to Mozilla Add-ons
-- [ ] Upload Opera GX ZIP to Opera Add-ons
+- [ ] Confirm the existing real AD-Twitcher screenshots still match the shipped UI
+- [ ] Run `npm run release:dry-run`
+- [ ] Inspect all four ZIP files and `release/SHA256SUMS`
+- [ ] Publish Chrome, Firefox and Edge through the protected tag workflow
+- [ ] Upload the Opera GX ZIP manually to Opera Add-ons
 
 A store never accepts a second upload under a version number it already has, so
-every resubmission needs `package.json` bumped and `node build.mjs --zip` rerun.
+every resubmission needs a new synchronized version and a fresh verified package.
 
 ## Store fields
 
@@ -28,7 +27,7 @@ every resubmission needs `package.json` bumped and `node build.mjs --zip` rerun.
 - Support URL: `https://x.com/zCrxticxl`
 - Support page URL (Opera): `https://github.com/zCrxticxl/AD-Twitcher/issues`
 - Privacy URL: `https://zcrxticxl.github.io/AD-Twitcher/privacy.html`
-- Source URL for Opera moderators: `https://github.com/zCrxticxl/AD-Twitcher/tree/v1.0.7`
+- Source URL for Opera moderators: `https://github.com/zCrxticxl/AD-Twitcher/tree/vX.Y.Z`
 - Chrome single purpose and permissions: copy from `store/PERMISSIONS.md`
 - Chrome remote code: `No`
 - Opera GX single purpose and permissions: copy from `store/PERMISSIONS.md`
