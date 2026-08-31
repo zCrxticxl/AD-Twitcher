@@ -58,8 +58,9 @@ live Twitch behavior still requires manual browser sessions.
     watchdog additionally takes back any pause the user did not ask for, capped
     at six resumes per minute.
 15. The popup footer shows the installed version in its bottom right corner. It
-    is read from the manifest at runtime, which `build.mjs` stamps from
-    `package.json`, so the badge cannot drift from the loaded package.
+    is read from the manifest at runtime. Release verification requires every
+    source manifest to match `package.json`, so the badge cannot drift from the
+    loaded package.
 16. The status tab has an activity card, because a working extension and a dead
     one used to look identical: lifetime counters only move when something is
     claimed, and hours can pass in between. It shows the channel being watched

@@ -11,15 +11,19 @@
   "scripts": {
     "build": "node build.mjs",
     "build:chrome": "node build.mjs chrome",
+    "build:edge": "node build.mjs edge",
     "build:firefox": "node build.mjs firefox",
     "build:opera": "node build.mjs opera",
     "package": "node build.mjs --zip",
     "check": "node scripts/check.mjs",
     "smoke": "node scripts/smoke.mjs",
     "harness": "node scripts/harness.mjs",
-    "test": "node scripts/check.mjs && node scripts/smoke.mjs && node scripts/harness.mjs"
+    "test": "node scripts/check.mjs && node scripts/smoke.mjs && node scripts/harness.mjs",
+    "version:set": "node scripts/version-set.mjs",
+    "verify": "npm test && node scripts/release-check.mjs",
+    "release:dry-run": "node scripts/release-dry-run.mjs"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

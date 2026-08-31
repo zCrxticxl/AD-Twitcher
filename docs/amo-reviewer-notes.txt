@@ -1,7 +1,7 @@
 Notes for the reviewer - AD-Twitcher 1.0.8
 
 Permissions:
-- storage: settings, activity log, drop progress - all local
+- storage: settings, activity state, counters and drop progress - all local
 - tabs: check for already-open channel/inventory tabs
 - alarms: periodic checks
 - notifications: "stream may be stalled" watchdog
@@ -9,8 +9,9 @@ Permissions:
 - Firefox uses a persistent background page.
 
 Data handling:
-- No telemetry, no analytics, no remote servers, no third-party requests.
-- Everything stays in browser.storage.local on the user's device.
+- No telemetry, analytics, remote servers or background network requests.
+- Stored settings and activity stay in browser.storage.local; short diagnostic
+  logs stay in memory. Nothing is transmitted by the extension.
 
 How to verify the 1.0.8 changes:
 1. Drops inventory (twitch.tv/drops/inventory): every running drop shows a

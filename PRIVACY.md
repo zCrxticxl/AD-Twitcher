@@ -1,12 +1,12 @@
 # Privacy Policy for AD-Twitcher
 
-Effective date: August 13, 2026
+Effective date: August 31, 2026
 
 AD-Twitcher does not collect, transmit, sell or share personal data.
 
 The extension reads information displayed on Twitch pages only to provide its features, including claiming available channel point bonuses and completed drops, muting advertisements, monitoring followed channels and displaying viewer activity metrics.
 
-Settings, counters, logs and measured viewer activity are stored locally in the browser through the browser extension storage API. This information never leaves the user's device through AD-Twitcher. Removing the extension deletes this locally stored extension data according to the browser's normal extension removal behavior.
+Settings, counters and measured viewer activity are stored locally through the browser extension storage API. Diagnostic logs are held only in memory while the relevant extension page or script is running. This information never leaves the user's device through AD-Twitcher. Removing the extension deletes its locally stored data according to the browser's normal extension removal behavior.
 
 AD-Twitcher does not use analytics, advertising identifiers, tracking pixels, remote code or external data-processing services. It does not request Twitch account credentials.
 
@@ -22,7 +22,7 @@ AD-Twitcher erhebt, überträgt, verkauft oder teilt keine personenbezogenen Dat
 
 Die Extension liest ausschließlich Informationen, die auf Twitch-Seiten angezeigt werden, um ihre Funktionen bereitzustellen. Dazu gehören das Einlösen verfügbarer Kanalpunkte-Boni und abgeschlossener Drops, das Stummschalten von Werbung, die Überwachung gefolgter Kanäle und die Anzeige von Messwerten zur Zuschaueraktivität.
 
-Einstellungen, Zähler, Logs und gemessene Zuschaueraktivität werden über den Extension-Speicher ausschließlich lokal im Browser gespeichert. AD-Twitcher überträgt diese Informationen nicht vom Gerät des Nutzers. Beim Entfernen der Extension löscht der Browser diese lokalen Extension-Daten entsprechend seinem normalen Verhalten.
+Einstellungen, Zähler und gemessene Zuschaueraktivität werden über den Extension-Speicher ausschließlich lokal im Browser gespeichert. Diagnose-Logs bleiben nur im Arbeitsspeicher, solange die jeweilige Extension-Seite oder das Skript läuft. AD-Twitcher überträgt diese Informationen nicht vom Gerät des Nutzers. Beim Entfernen der Extension löscht der Browser die lokal gespeicherten Extension-Daten entsprechend seinem normalen Verhalten.
 
 AD-Twitcher verwendet keine Analysewerkzeuge, Werbe-IDs, Tracking-Pixel, externen Code oder externe Datenverarbeitungsdienste. Die Extension fragt keine Twitch-Zugangsdaten ab.
 
