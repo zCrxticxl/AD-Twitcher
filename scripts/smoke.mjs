@@ -160,6 +160,23 @@ function evalFragment(source, pattern, tail, context = {}) {
   eq('no digits -> null', parseCount('LIVE'), null);
 }
 
+/* ---------------------------------------- drops directory: viewer counts */
+{
+  const src = read('src/content/modules/drops.js');
+  const compactNumber = evalFragment(
+    src,
+    /var DIRECTORY_COUNT_SCALES = \[[\s\S]*?\n {2}\];[\s\S]*?function compactNumber[\s\S]*?\n {2}\}/,
+    'compactNumber;');
+
+  console.log('\n[drops directory viewer count]');
+  eq('German thousands separator', compactNumber('2.418 Zuschauer'), 2418);
+  eq('English thousands separator', compactNumber('12,345 viewers'), 12345);
+  eq('Polish compact suffix', compactNumber('3,4 tys.'), 3400);
+  eq('Turkish compact suffix', compactNumber('2,5 bin'), 2500);
+  eq('Chinese compact suffix', compactNumber('1.2万'), 12000);
+  eq('no viewer count', compactNumber('LIVE'), 0);
+}
+
 /* ------------------------------------------ sidebar-watch: loginFromHref */
 {
   const src = read('src/content/modules/sidebar-watch.js');
@@ -466,7 +483,7 @@ function evalFragment(source, pattern, tail, context = {}) {
   ]);
 
   // Title, end date, then the tower that holds this campaign's cards. A live
-  // campaign also links to the channels where it can be earned; one that has
+  // campaign also links to the channel where it can be earned; one that has
   // ended keeps only its outward "about this drop" link, and that difference is
   // what separates them without parsing a localized date.
   const campaign = (title, cards, over) => el('DIV', {}, [
@@ -476,8 +493,8 @@ function evalFragment(source, pattern, tail, context = {}) {
       over
         ? el('A', {attrs: {href: 'https://example.invalid/drops'}}, ['Über diesen Drop'])
         : el('DIV', {}, [
-          el('A', {attrs: {href: '/directory/category/kord-breach'}},
-            ['teilnehmenden Live-Kanal']),
+          el('A', {attrs: {href: '/eligible_channel'}},
+            ['teilnehmender Live-Kanal']),
           el('A', {attrs: {href: 'https://example.invalid/drops'}}, ['Über diesen Drop'])
         ])
     ]),
@@ -539,7 +556,8 @@ function evalFragment(source, pattern, tail, context = {}) {
   const collectFrom = (root) => vm.runInNewContext(
     body + '\ncollectProgress;',
     {
-      isFinite, Number, String, Math, Array, Object,
+      isFinite, Number, String, Math, Array, Object, URL,
+      location: {origin: 'https://www.twitch.tv'},
       state: {mode: 'claim'},
       document: {body: root},
       INVENTORY_ROOTS: [],
@@ -566,6 +584,9 @@ function evalFragment(source, pattern, tail, context = {}) {
   eq('every drop carries its campaign',
     got.map((g) => g.campaign).filter((c, i, all) => all.indexOf(c) === i),
     ['KORD BREACH S1 Drops', 'EWC 2026']);
+  eq('a direct eligible Twitch channel link keeps the campaign active',
+    scan.campaigns.every((entry) => entry.targets.some((target) =>
+      target.kind === 'channel' && target.href === '/eligible_channel')), true);
   eq('the same tier in two campaigns stays two drops',
     got.filter((g) => g.name === 'Rare 2').length, 2);
   eq('a collected reward has a bar but no caption, and is not progress',
@@ -664,8 +685,34 @@ function evalFragment(source, pattern, tail, context = {}) {
     campaign('Sponsor Only Drops', [card('Solo', 40, 'von 2 Stunden', false)], true),
     campaign('EWC 2026', [card('Rare 2', 93, 'von 4 Stunden', false)], false)
   ]));
-  eq('but the same campaign is dropped once a genuinely live one is on the page',
+  eq('but it is dropped beside a campaign with a direct eligible channel link',
     goneAmongLive.items.map((x) => x.name), ['Rare 2']);
+}
+
+/* -------------------------------- drops: claim verification needs a real change */
+{
+  const src = read('src/content/modules/drops.js');
+  const body = src.match(/function claimWasAccepted[\s\S]*?\n {2}\}/)[0];
+  const D = {
+    textOf: (button) => button.label,
+    isVisible: () => true
+  };
+  const claimWasAccepted = vm.runInNewContext(
+    '(' + body.replace(/^function claimWasAccepted/, 'function') + ')',
+    {D, String});
+  const button = {
+    isConnected: true,
+    disabled: false,
+    label: 'Claim Now',
+    getAttribute: () => 'false'
+  };
+
+  console.log('\n[drop claim verification]');
+  eq('an unchanged claim label is not verified',
+    claimWasAccepted(button, 'Claim Now'), false);
+  button.label = '  CLAIM\u00a0NOW  ';
+  eq('normalization-only label changes are not verified',
+    claimWasAccepted(button, 'Claim Now'), false);
 }
 
 /* --------------------- drops: retirement notice matched per locale, both ways */

@@ -39,6 +39,12 @@
       checkIntervalMin: 120,      // Safety net for a missed notification.
       openInventoryTab: true,     // Open the inventory in a background tab.
       refreshInventory: true,     // Reload an inventory view older than the drop.
+      autoFarm: false,            // Discover campaigns and own one farming tab.
+      progressProbeMin: 5,        // Refresh campaign progress while farming.
+      noProgressMin: 15,          // Rotate after repeated unchanged snapshots.
+      streamSelection: 'first',   // 'first', 'top', 'low' or 'random'.
+      includeInStats: false,
+      farmNotifications: true,
       closeAfterMs: 25000
     },
 

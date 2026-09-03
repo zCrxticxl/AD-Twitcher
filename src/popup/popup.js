@@ -47,6 +47,28 @@
    */
   var masterTogglePending = false;
 
+  /** @type {boolean} */
+  var dropsSelectionDirty = false;
+  /** @type {?number} */
+  var actionToastTimer = null;
+
+  /** @type {string} */
+  var channelStatsRange = 'all';
+  /** @type {number} Prevents a slow previous range replacing a newer one. */
+  var channelStatsRequest = 0;
+
+  /** @param {string} key @param {boolean=} done @param {number=} timeout */
+  function showActionToast(key, done, timeout) {
+    var toast = $('actionToast');
+    clearTimeout(actionToastTimer);
+    $('actionToastText').textContent = ADT.msg(key);
+    toast.classList.toggle('is-done', !!done);
+    toast.hidden = false;
+    if (done) {
+      actionToastTimer = setTimeout(function () { toast.hidden = true; }, timeout || 2200);
+    }
+  }
+
   /**
    * Must mirror content_scripts[0].js in both manifests. scripts/check.mjs
    * fails the build if the two drift apart.
@@ -148,20 +170,36 @@
 
   /* --------------------------------------------------------- popup tabs */
 
+  /** @param {!HTMLElement} btn */
+  function activateTab(btn) {
+    $$('.tabs__btn').forEach(function (b) {
+      var active = b === btn;
+      b.classList.toggle('is-active', active);
+      b.setAttribute('aria-selected', String(active));
+      b.tabIndex = active ? 0 : -1;
+    });
+    $$('.pane').forEach(function (p) { p.classList.remove('is-active'); });
+    var pane = document.querySelector('.pane[data-pane="' + btn.dataset.tab + '"]');
+    if (pane) pane.classList.add('is-active');
+    if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
+    if (btn.dataset.tab === 'viewers') refreshViewerStats();
+    if (btn.dataset.tab === 'channelStats') refreshChannelStats();
+  }
+
   function bindTabs() {
-    $$('.tabs__btn').forEach(function (btn) {
-      btn.addEventListener('click', function () {
-        $$('.tabs__btn').forEach(function (b) {
-          b.classList.remove('is-active');
-          b.setAttribute('aria-selected', 'false');
-        });
-        $$('.pane').forEach(function (p) { p.classList.remove('is-active'); });
-        btn.classList.add('is-active');
-        btn.setAttribute('aria-selected', 'true');
-        var pane = document.querySelector('.pane[data-pane="' + btn.dataset.tab + '"]');
-        if (pane) pane.classList.add('is-active');
-        if (document.scrollingElement) document.scrollingElement.scrollTop = 0;
-        if (btn.dataset.tab === 'viewers') refreshViewerStats();
+    var tabs = $$('.tabs__btn');
+    tabs.forEach(function (btn, index) {
+      btn.addEventListener('click', function () { activateTab(btn); });
+      btn.addEventListener('keydown', function (event) {
+        var next = index;
+        if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+        else if (event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+        else if (event.key === 'Home') next = 0;
+        else if (event.key === 'End') next = tabs.length - 1;
+        else return;
+        event.preventDefault();
+        tabs[next].focus();
+        activateTab(tabs[next]);
       });
     });
   }
@@ -191,6 +229,20 @@
       if (el.type === 'checkbox') el.checked = !!v;
       else el.value = v == null ? '' : v;
     });
+
+    $$('.num__def[data-def]').forEach(function (el) {
+      var dv = getPath(ADT.settings.DEFAULTS, el.dataset.def);
+      el.textContent = dv == null ? '' : ADT.msg('defaultValue', dv);
+    });
+
+    $$('[data-group-reset]').forEach(function (el) {
+      var group = el.dataset.groupReset;
+      var defs = group === 'logLevel' ? ADT.settings.DEFAULTS.logLevel : getPath(ADT.settings.DEFAULTS, group);
+      el.disabled = JSON.stringify(getPath(s, group)) === JSON.stringify(defs);
+    });
+
+    var settingsPane = document.querySelector('.pane[data-pane="settings"]');
+    if (settingsPane) settingsPane.classList.toggle('autoFarm-on', !!s.drops.autoFarm);
 
     if ($('watchlist') !== editing && !watchlistTimer) {
       $('watchlist').value = (s.autoJoin.channels || []).join('\n');
@@ -238,6 +290,20 @@
     var minutes = Math.max(0, Math.round(ms / 60000));
     if (minutes < 60) return ADT.msg('durationMinutes', minutes);
     return ADT.msg('durationHours', [String(Math.floor(minutes / 60)), String(minutes % 60)]);
+  }
+
+  /** @param {number} ms @return {string} */
+  function channelWatchDuration(ms) {
+    var seconds = Math.max(0, Math.round(ms / 1000));
+    if (seconds < 60) return ADT.msg('channelStatsDurationSeconds', seconds);
+    var minutes = Math.round(seconds / 60);
+    if (minutes < 60) return ADT.msg('durationMinutes', minutes);
+    if (minutes < 1440) {
+      return ADT.msg('durationHours', [String(Math.floor(minutes / 60)), String(minutes % 60)]);
+    }
+    return ADT.msg('channelStatsDurationDays', [
+      String(Math.floor(minutes / 1440)), String(Math.floor((minutes % 1440) / 60))
+    ]);
   }
 
   /** @const {!Object<string, string>} Drops-check outcome to message key. */
@@ -424,6 +490,143 @@
         : 'dropProgressEmpty');
   }
 
+  /** @const {!Object<string, string>} */
+  var FARM_STATES = {
+    off: 'farmStateOff',
+    discovering: 'farmStateDiscovering',
+    switching: 'farmStateSwitching',
+    watching: 'farmStateWatching',
+    stalled: 'farmStateStalled',
+    'no-candidates': 'farmStateNoCandidates',
+    complete: 'farmStateComplete'
+  };
+
+  /** @param {!Object} farm */
+  function renderFarm(farm) {
+    farm = farm || {};
+    var state = farm.state || 'off';
+    $('farmState').textContent = ADT.msg(FARM_STATES[state] || 'farmStateOff');
+    $('farmState').className = state === 'watching' || state === 'complete'
+      ? 'farm-status--ok'
+      : (state === 'stalled' || state === 'no-candidates' ? 'farm-status--warn' : '');
+    $('farmCampaign').textContent = farm.active && farm.active.campaignName
+      ? farm.active.campaignName : EMPTY;
+    $('farmStream').textContent = farm.active && farm.active.channel
+      ? farm.active.channel : EMPTY;
+
+    var queue = $('farmQueue');
+    queue.textContent = '';
+    (farm.queue || []).forEach(function (campaign, index) {
+      var row = document.createElement('div');
+      row.className = 'farm-row';
+      var main = document.createElement('div');
+      main.className = 'farm-row__main';
+      var name = document.createElement('span');
+      name.className = 'farm-row__name';
+      name.textContent = (index + 1) + '. ' + campaign.name;
+      var meta = document.createElement('span');
+      meta.className = 'farm-row__meta';
+      meta.textContent = campaign.remainingMs && campaign.remainingMs < Number.MAX_VALUE
+        ? ADT.msg('dropRemaining', duration(campaign.remainingMs)) : '';
+      main.appendChild(name);
+      main.appendChild(meta);
+      row.appendChild(main);
+      [-1, 1].forEach(function (direction) {
+        var button = document.createElement('button');
+        button.className = 'farm-move';
+        button.textContent = direction < 0 ? '↑' : '↓';
+        button.title = ADT.msg(direction < 0 ? 'farmMoveUp' : 'farmMoveDown');
+        button.setAttribute('aria-label', button.title);
+        button.dataset.farmKey = campaign.key;
+        button.dataset.farmDirection = String(direction);
+        row.appendChild(button);
+      });
+      queue.appendChild(row);
+    });
+    if (!queue.firstChild) queue.textContent = ADT.msg('farmNoCampaigns');
+
+    var history = $('farmHistory');
+    history.textContent = '';
+    (farm.history || []).slice(0, 5).forEach(function (item) {
+      var row = document.createElement('div');
+      row.className = 'farm-row';
+      var main = document.createElement('div');
+      main.className = 'farm-row__main';
+      var name = document.createElement('span');
+      name.className = 'farm-row__name';
+      name.textContent = item.reward || item.campaign || ADT.msg('dropUnnamed');
+      var meta = document.createElement('span');
+      meta.className = 'farm-row__meta';
+      meta.textContent = ADT.msg(item.status === 'verified'
+        ? 'farmClaimVerified' : 'farmClaimUnverified') + ' · ' + ago(item.verifiedAt || item.attemptedAt);
+      main.appendChild(name);
+      main.appendChild(meta);
+      row.appendChild(main);
+      history.appendChild(row);
+    });
+    if (!history.firstChild) history.textContent = ADT.msg('farmNoHistory');
+
+    $('farmHint').textContent = farm.lastEventAt
+      ? ADT.msg('farmLastEvent', ago(farm.lastEventAt)) : '';
+  }
+
+  /** @param {!Array} campaigns @param {!Array} selected @param {!Object} catalog */
+  function renderDropsList(campaigns, selected, catalog) {
+    var list = $('dropsList');
+    catalog = catalog || {};
+    var draft = {};
+    if (dropsSelectionDirty) {
+      list.querySelectorAll('input[type="checkbox"]:checked').forEach(function (cb) {
+        draft[cb.value] = true;
+      });
+    }
+    list.textContent = '';
+    $('dropsLoading').hidden = !catalog.scanning;
+    $('dropsCatalogMeta').textContent = catalog.scannedAt
+      ? ADT.msg('dropsCatalogMeta', [String(campaigns.length), ago(catalog.scannedAt)]) : '';
+    if (!campaigns || !campaigns.length) {
+      if (!catalog.scanning) list.textContent = catalog.error || ADT.msg('dropsNoCampaigns');
+      return;
+    }
+    var selectedSet = {};
+    (selected || []).forEach(function (k) { selectedSet[k] = true; });
+    if (dropsSelectionDirty) selectedSet = draft;
+    campaigns.forEach(function (campaign) {
+      var row = document.createElement('label');
+      row.className = 'drop-item' + (campaign.complete ? ' drop-item--done' : '');
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.value = campaign.key;
+      cb.checked = !!selectedSet[campaign.key];
+      cb.disabled = !!campaign.complete || campaign.farmable === false;
+      var info = document.createElement('span');
+      info.className = 'drop-item__info';
+      var name = document.createElement('span');
+      name.className = 'drop-item__name';
+      name.textContent = campaign.name;
+      var meta = document.createElement('span');
+      meta.className = 'drop-item__meta';
+      var parts = [];
+      if (campaign.publisher) parts.push(campaign.publisher);
+      if (campaign.dateRange) parts.push(campaign.dateRange);
+      if (campaign.rewards && campaign.rewards.length) {
+        var done = campaign.rewards.filter(function (r) { return r.percent >= 100; }).length;
+        parts.push(done + '/' + campaign.rewards.length + ' ' + ADT.msg('dropsRewards'));
+      }
+      if (campaign.remainingMs && campaign.remainingMs < Number.MAX_VALUE) {
+        parts.push(ADT.msg('dropRemaining', duration(campaign.remainingMs)));
+      }
+      if (campaign.complete) parts.push(ADT.msg('dropsComplete'));
+      if (campaign.farmable === false) parts.push(ADT.msg('dropsUnavailable'));
+      meta.textContent = parts.join(' · ');
+      info.appendChild(name);
+      info.appendChild(meta);
+      row.appendChild(cb);
+      row.appendChild(info);
+      list.appendChild(row);
+    });
+  }
+
   /**
    * @param {!Object} item
    * @return {number} Milliseconds left, or 0 when the requirement is unknown.
@@ -600,6 +803,87 @@
       : [chip('chip chip--off', ADT.msg('chipNone'))]);
   }
 
+  /* ------------------------------------------------------- channel stats */
+
+  /** @const {!Object<string, string>} */
+  var CHANNEL_RANGE_LABELS = {
+    today: 'channelStatsToday',
+    week: 'channelStatsWeek',
+    month: 'channelStatsMonth',
+    all: 'channelStatsAll'
+  };
+
+  /** @param {!Object} data */
+  function renderChannelStats(data) {
+    data = data || {};
+    var rows = Array.isArray(data.rows) ? data.rows : [];
+    $('csLoading').hidden = true;
+    $('csWatchtime').textContent = channelWatchDuration(data.watchMs || 0);
+    $('csChannels').textContent = ADT.formatNumber(data.channels || 0);
+    $('csSessions').textContent = ADT.formatNumber(data.sessions || 0);
+    $('csTop').textContent = data.topChannel || EMPTY;
+    $('csPeriod').textContent = ADT.msg(CHANNEL_RANGE_LABELS[data.range] || 'channelStatsAll');
+    $('csEmpty').hidden = rows.length > 0;
+
+    var list = $('csList');
+    list.textContent = '';
+    var maxWatch = rows.length ? Math.max(1, Number(rows[0].watchMs || 0)) : 1;
+    rows.forEach(function (row, index) {
+      var item = document.createElement('div');
+      item.className = 'channel-stat-row';
+
+      var rank = document.createElement('span');
+      rank.className = 'channel-stat-rank';
+      rank.textContent = String(index + 1).padStart(2, '0');
+
+      var main = document.createElement('div');
+      main.className = 'channel-stat-main';
+      var name = document.createElement('span');
+      name.className = 'channel-stat-name';
+      name.textContent = row.channel;
+      var meta = document.createElement('span');
+      meta.className = 'channel-stat-meta';
+      var sessionCount = Math.max(0, Math.round(Number(row.sessions || 0)));
+      var sessionKey = sessionCount === 1
+        ? 'channelStatsSessionSingle'
+        : 'channelStatsSessionCount';
+      meta.textContent = ADT.msg(sessionKey, ADT.formatNumber(sessionCount)) +
+        ' · ' + ADT.msg('channelStatsLastSeen', ago(row.lastWatchedAt));
+      main.appendChild(name);
+      main.appendChild(meta);
+
+      var value = document.createElement('span');
+      value.className = 'channel-stat-value';
+      value.textContent = channelWatchDuration(row.watchMs || 0);
+
+      var track = document.createElement('div');
+      track.className = 'channel-stat-track';
+      var fill = document.createElement('div');
+      fill.className = 'channel-stat-fill';
+      fill.style.width = Math.max(3, Math.round(Number(row.watchMs || 0) / maxWatch * 100)) + '%';
+      track.appendChild(fill);
+
+      item.appendChild(rank);
+      item.appendChild(main);
+      item.appendChild(value);
+      item.appendChild(track);
+      list.appendChild(item);
+    });
+  }
+
+  function refreshChannelStats() {
+    var request = ++channelStatsRequest;
+    $('csLoading').hidden = false;
+    ADT.send({ type: 'adt:channel-stats', range: channelStatsRange }).then(function (res) {
+      if (request !== channelStatsRequest) return;
+      if (!res || !res.ok) {
+        renderChannelStats({ range: channelStatsRange, rows: [] });
+        return;
+      }
+      renderChannelStats(res.stats);
+    });
+  }
+
   /* ------------------------------------------------------- viewer stats */
 
   function refreshViewerStats() {
@@ -682,10 +966,36 @@
    */
   function settingsWriteFailed(e) {
     ADT.log.error('Settings write failed: ' + (e && e.message));
+    if (typeof showActionToast === 'function') showActionToast('settingsSaveFailed', true);
     ADT.settings.get().then(renderSettings);
   }
 
+  /**
+   * Common post-write hook for every `[data-set]` field. Discrete actions
+   * (checkbox, select) get an explicit confirmation toast; free-typing number
+   * fields stay quiet so the toast does not flicker on every keystroke.
+   *
+   * @param {string} evt The event type that triggered the write.
+   */
+  function onSettingsSaved(evt) {
+    ADT.send({ type: 'adt:settings-changed' });
+    if (evt === 'change') showActionToast('settingsSaved', true, 1300);
+  }
+
   function bindInputs() {
+    $$('[data-stats-range]').forEach(function (button) {
+      button.setAttribute('aria-pressed', String(button.dataset.statsRange === channelStatsRange));
+      button.addEventListener('click', function () {
+        channelStatsRange = button.dataset.statsRange;
+        $$('[data-stats-range]').forEach(function (other) {
+          var active = other === button;
+          other.classList.toggle('is-active', active);
+          other.setAttribute('aria-pressed', String(active));
+        });
+        refreshChannelStats();
+      });
+    });
+
     $$('[data-set]').forEach(function (el) {
       var evt = (el.type === 'checkbox' || el.tagName === 'SELECT') ? 'change' : 'input';
       el.addEventListener(evt, function () {
@@ -700,7 +1010,7 @@
         }
 
         ADT.settings.set(patchFromPath(el.dataset.set, val)).then(function () {
-          ADT.send({ type: 'adt:settings-changed' });
+          onSettingsSaved(evt);
         }, settingsWriteFailed);
       });
     });
@@ -736,11 +1046,30 @@
       });
     });
 
+    $$('[data-group-reset]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var group = btn.dataset.groupReset;
+        if (!confirm(ADT.msg('confirmResetGroup'))) return;
+        var defs = group === 'logLevel'
+          ? ADT.settings.DEFAULTS.logLevel
+          : ADT.settings.DEFAULTS[group];
+        var patch = (group === 'logLevel')
+          ? { logLevel: defs }
+          : patchFromPath(group, JSON.parse(JSON.stringify(defs)));
+        ADT.settings.set(patch).then(function () {
+          ADT.settings.get().then(renderSettings);
+          showActionToast('settingsResetDone', true);
+          ADT.send({ type: 'adt:settings-changed' });
+        }, settingsWriteFailed);
+      });
+    });
+
     $('btnReset').addEventListener('click', function () {
       if (!confirm(ADT.msg('confirmReset'))) return;
       ADT.settings.reset().then(function (s) {
         renderSettings(s);
         ADT.settings.getStats().then(renderStats);
+        showActionToast('settingsResetDone', true);
         ADT.send({ type: 'adt:settings-changed' });
       });
     });
@@ -759,6 +1088,47 @@
     $('btnRefresh').addEventListener('click', function () {
       if (activeTabId != null) ADT.sendToTab(activeTabId, { type: 'adt:refresh' });
       refreshAll();
+    });
+
+    $('btnOpenInventory').addEventListener('click', function () {
+      showActionToast('dropsOpeningCampaigns');
+      ADT.send({ type: 'adt:open-drops-inventory' }).then(function (res) {
+        if (!res || !res.ok) {
+          showActionToast('dropsScanFailed', true);
+          return;
+        }
+        setTimeout(refreshAll, 700);
+      });
+    });
+
+    $('btnResetChannelStats').addEventListener('click', function () {
+      if (!confirm(ADT.msg('channelStatsConfirmReset'))) return;
+      ADT.send({ type: 'adt:reset-channel-stats' }).then(function (res) {
+        if (res && res.ok) refreshChannelStats();
+      });
+    });
+
+    $('dropsList').addEventListener('change', function (event) {
+      if (event.target && event.target.type === 'checkbox') dropsSelectionDirty = true;
+    });
+
+    $('btnApplyDrops').addEventListener('click', function () {
+      var checks = $('dropsList').querySelectorAll('input[type="checkbox"]:checked');
+      var keys = [];
+      checks.forEach(function (cb) { keys.push(cb.value); });
+      var button = $('btnApplyDrops');
+      button.disabled = true;
+      showActionToast('dropsApplyingQueue');
+      ADT.send({ type: 'adt:farm-set-priority', keys: keys }).then(function (res) {
+        if (!res || !res.ok) throw new Error('queue write failed');
+        dropsSelectionDirty = false;
+        button.disabled = false;
+        showActionToast('dropsQueueSaved', true);
+        refreshAll();
+      }).catch(function () {
+        button.disabled = false;
+        showActionToast('dropsQueueFailed', true);
+      });
     });
 
     $('btnInject').addEventListener('click', function () {
@@ -789,6 +1159,16 @@
     $('btnLogBg').addEventListener('click', function () {
       ADT.send({ type: 'adt:bg-log' }).then(showLog);
     });
+
+    $('farmQueue').addEventListener('click', function (event) {
+      var button = event.target.closest && event.target.closest('[data-farm-key]');
+      if (!button) return;
+      ADT.send({
+        type: 'adt:farm-priority',
+        key: button.dataset.farmKey,
+        direction: Number(button.dataset.farmDirection)
+      }).then(refreshAll);
+    });
   }
 
   /* ---------------------------------------------------------- bootstrap */
@@ -809,6 +1189,9 @@
         renderLive(res.live);
         renderActivity(res.activity || {}, stats);
         renderProgress((res.activity && res.activity.progress) || {});
+        var farm = res.farm || {};
+        renderFarm(farm);
+        renderDropsList(farm.availableCampaigns || [], farm.selected || [], farm.catalog || {});
       }
     });
 
@@ -837,6 +1220,8 @@
     refreshAll();
     var pane = document.querySelector('.pane[data-pane="viewers"]');
     if (pane && pane.classList.contains('is-active')) refreshViewerStats();
+    var channelPane = document.querySelector('.pane[data-pane="channelStats"]');
+    if (channelPane && channelPane.classList.contains('is-active')) refreshChannelStats();
   }, 3000);
 
   window.addEventListener('unload', function () { clearInterval(pollTimer); });

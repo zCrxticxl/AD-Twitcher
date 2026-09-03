@@ -32,13 +32,14 @@ all twelve caption sets rather than English only.
 |---|---|---|
 | `watchHealth` | Detects stalled playback, resumes an unrequested pause, protects the tab and sends a local alert | Channel pages |
 | `channelPoints` | Clicks the bonus chest | Channel pages |
-| `drops` | Claims finished drops (inventory, reloading a stale view first) and reads the unlock notification | Everywhere |
+| `drops` | Farms eligible campaigns in a dedicated muted stream tab, tracks progress and claims finished drops | Everywhere |
 | `adMute` | Detects ads, mutes the browser tab, covers the player with an overlay | Channel pages |
 | `viewerStats` | Measures viewer and chat raw values | Channel pages |
 | `sidebarWatch` | Reports live status from the followed-channels sidebar | Everywhere |
 
-The background half opens and closes tabs for auto-join, runs the periodic drops
-check and owns the counters.
+The background half owns the automatic campaign queue and its dedicated farming
+tab, opens and closes tabs for auto-join, runs periodic drops checks and owns the
+counters.
 
 **How much longer.** Each drop card carries an ARIA progress bar, so the
 percentage is read as a number instead of out of localized text. The caption
@@ -80,6 +81,30 @@ when the last drops check ran and what came of it, when the next one is due, and
 what was claimed last. Every check writes its outcome to `storage.local` -
 including the ones that found nothing, were switched off or failed - so the card
 stays honest after the service worker has been terminated and restarted.
+
+**Personal channel history.** While Watch Health is enabled, the My stats tab
+groups verified player time by channel for today, the current calendar week,
+the current month and all time. Disabling Watch Health stops new history from
+being recorded. A session starts with the first advancing media interval or
+after a five-minute gap. The measurement follows `<video>.currentTime`, so an
+open tab, paused player or stalled stream does not accumulate time. Overlapping
+intervals from duplicate tabs on the same channel are merged instead of counted
+twice.
+
+Channel names, playback totals, session counts and timestamps stay in
+`storage.local`; no Twitch API, OAuth, analytics endpoint or extension backend
+is involved. All channel history can be deleted from the same popup tab. Daily
+buckets are retained for 400 days and the least recently watched entries are
+pruned if the history exceeds 250 channels.
+
+**Automatic campaign farming.** When enabled, the background ranks active
+campaigns by a manual queue override, expiry and remaining watch time. It uses
+the eligible Twitch links shown in the inventory to find a live channel, keeps
+one extension-owned stream tab muted at browser level, and moves to the next
+candidate after repeated progress snapshots remain unchanged. Closing that tab
+or restarting the browser resumes from the locally persisted queue. No OAuth,
+Twitch API or external service is involved, and an existing user tab is never
+adopted as the farming tab.
 
 ## Build and install
 
@@ -123,13 +148,14 @@ store setup guides under [`docs/`](docs).
 
 ## What works, and what cannot
 
-**Drops are claimed, not farmed.**
-Twitch counts drop progress server-side from the running player's heartbeats.
-Nothing accumulates without an open stream. The watchdog can detect stopped
-playback, resume a player that paused on its own, protect the tab from
-automatic discarding and attempt one recovery reload, but Twitch still decides
-whether viewing progress counts. The extension collects finished drops after
-Twitch marks them complete.
+**Drops are farmed through a real Twitch stream.**
+Twitch counts progress server-side from the running player's heartbeats, so the
+automatic farmer opens an eligible live stream rather than simulating progress.
+The watchdog can detect stopped playback, resume a player that paused on its
+own, protect the tab from automatic discarding and attempt one recovery reload.
+AD-Twitcher can switch streams when inventory snapshots stop advancing and can
+claim a finished reward, but Twitch still decides whether viewing progress
+counts and whether a claim is accepted.
 
 **The inventory page has to be reloaded, not rescanned.**
 Twitch renders `/drops/inventory` once, from data it fetched while the page was

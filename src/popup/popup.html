@@ -26,14 +26,16 @@
   </header>
 
   <nav class="tabs" role="tablist">
-    <button class="tabs__btn is-active" data-tab="status" role="tab" aria-selected="true" data-i18n="tabStatus"></button>
-    <button class="tabs__btn" data-tab="settings" role="tab" aria-selected="false" data-i18n="tabSettings"></button>
-    <button class="tabs__btn" data-tab="viewers" role="tab" aria-selected="false" data-i18n="tabViewers"></button>
-    <button class="tabs__btn" data-tab="log" role="tab" aria-selected="false" data-i18n="tabLog"></button>
+    <button class="tabs__btn is-active" id="tab-status" data-tab="status" role="tab" aria-controls="pane-status" aria-selected="true" tabindex="0" data-i18n="tabStatus"></button>
+    <button class="tabs__btn" id="tab-channelStats" data-tab="channelStats" role="tab" aria-controls="pane-channelStats" aria-selected="false" tabindex="-1" data-i18n="tabChannelStats"></button>
+    <button class="tabs__btn" id="tab-drops" data-tab="drops" role="tab" aria-controls="pane-drops" aria-selected="false" tabindex="-1" data-i18n="tabDrops"></button>
+    <button class="tabs__btn" id="tab-settings" data-tab="settings" role="tab" aria-controls="pane-settings" aria-selected="false" tabindex="-1" data-i18n="tabSettings"></button>
+    <button class="tabs__btn" id="tab-viewers" data-tab="viewers" role="tab" aria-controls="pane-viewers" aria-selected="false" tabindex="-1" data-i18n="tabViewers"></button>
+    <button class="tabs__btn" id="tab-log" data-tab="log" role="tab" aria-controls="pane-log" aria-selected="false" tabindex="-1" data-i18n="tabLog"></button>
   </nav>
 
   <!-- Status -->
-  <section class="pane is-active" data-pane="status">
+  <section class="pane is-active" id="pane-status" data-pane="status" role="tabpanel" aria-labelledby="tab-status">
     <div class="ctx" id="ctxLine" data-i18n="statusSearching"></div>
     <div class="diag" id="diagBox" hidden></div>
     <button class="btn btn--warn" id="btnInject" data-i18n="btnInject" hidden></button>
@@ -74,6 +76,22 @@
     </div>
 
     <div class="card">
+      <div class="card__head" data-i18n="cardDropFarmer"></div>
+      <label class="opt">
+        <input type="checkbox" id="farmToggle" data-set="drops.autoFarm">
+        <span data-i18n="optDropsAutoFarm"></span>
+      </label>
+      <div class="kv"><span data-i18n="farmState"></span><b id="farmState">-</b></div>
+      <div class="kv"><span data-i18n="farmActiveCampaign"></span><b id="farmCampaign">-</b></div>
+      <div class="kv"><span data-i18n="farmStream"></span><b id="farmStream">-</b></div>
+      <div class="farm-section" data-i18n="farmQueue"></div>
+      <div id="farmQueue"></div>
+      <div class="farm-section" data-i18n="farmHistory"></div>
+      <div id="farmHistory"></div>
+      <p class="hint" id="farmHint"></p>
+    </div>
+
+    <div class="card">
       <div class="card__head" data-i18n="cardLiveWatcher"></div>
       <div class="kv"><span data-i18n="liveLastReport"></span><b id="lwAge">-</b></div>
       <div class="kv"><span data-i18n="liveInSidebar"></span><b id="lwLive">-</b></div>
@@ -87,10 +105,82 @@
     </div>
   </section>
 
-  <!-- Settings -->
-  <section class="pane" data-pane="settings">
+  <!-- Local channel stats -->
+  <section class="pane" id="pane-channelStats" data-pane="channelStats" role="tabpanel" aria-labelledby="tab-channelStats">
+    <div class="channel-stats-intro">
+      <div>
+        <div class="channel-stats-intro__eyebrow" data-i18n="channelStatsEyebrow"></div>
+        <h2 data-i18n="channelStatsTitle"></h2>
+      </div>
+      <p data-i18n="channelStatsHint"></p>
+    </div>
+
+    <div class="range-switch" role="group" data-i18n-aria-label="channelStatsRangeLabel">
+      <button data-stats-range="today" data-i18n="channelStatsToday"></button>
+      <button data-stats-range="week" data-i18n="channelStatsWeek"></button>
+      <button data-stats-range="month" data-i18n="channelStatsMonth"></button>
+      <button class="is-active" data-stats-range="all" data-i18n="channelStatsAll"></button>
+    </div>
+
+    <div class="channel-stats-summary">
+      <div class="channel-metric channel-metric--primary">
+        <span data-i18n="channelStatsWatchtime"></span>
+        <b id="csWatchtime">-</b>
+      </div>
+      <div class="channel-metric">
+        <span data-i18n="channelStatsChannels"></span>
+        <b id="csChannels">-</b>
+      </div>
+      <div class="channel-metric">
+        <span data-i18n="channelStatsSessions"></span>
+        <b id="csSessions">-</b>
+      </div>
+      <div class="channel-metric">
+        <span data-i18n="channelStatsTopChannel"></span>
+        <b id="csTop">-</b>
+      </div>
+    </div>
+
+    <div class="channel-list-head">
+      <span data-i18n="channelStatsRanking"></span>
+      <span id="csPeriod"></span>
+    </div>
+    <div class="channel-stats-loading" id="csLoading" data-i18n="channelStatsLoading"></div>
+    <div class="channel-stats-list" id="csList"></div>
+    <div class="channel-stats-empty" id="csEmpty" data-i18n="channelStatsEmpty" hidden></div>
+    <button class="btn btn--danger" id="btnResetChannelStats" data-i18n="channelStatsReset"></button>
+  </section>
+
+  <!-- Available Drops -->
+  <section class="pane" id="pane-drops" data-pane="drops" role="tabpanel" aria-labelledby="tab-drops">
     <div class="card">
-      <div class="card__head" data-i18n="cardChannelPoints"></div>
+      <div class="card__head" data-i18n="dropsAvailableTitle"></div>
+      <p class="hint" data-i18n="dropsAvailableHint"></p>
+      <div class="drop-loading" id="dropsLoading" hidden>
+        <span class="spinner" aria-hidden="true"></span>
+        <span data-i18n="dropsScanning"></span>
+      </div>
+      <div class="drop-catalog-meta" id="dropsCatalogMeta"></div>
+      <div id="dropsList"></div>
+      <div class="row drop-actions">
+        <button class="btn" id="btnOpenInventory" data-i18n="btnOpenInventory"></button>
+        <button class="btn" id="btnApplyDrops" data-i18n="btnApplyDrops"></button>
+      </div>
+    </div>
+  </section>
+
+  <div class="action-toast" id="actionToast" role="status" aria-live="polite" hidden>
+    <span class="spinner" id="actionSpinner" aria-hidden="true"></span>
+    <span id="actionToastText"></span>
+  </div>
+
+  <!-- Settings -->
+  <section class="pane" id="pane-settings" data-pane="settings" role="tabpanel" aria-labelledby="tab-settings">
+    <div class="card" role="group" aria-labelledby="chPoints" data-group="channelPoints">
+      <div class="card__head" id="chPoints">
+        <span data-i18n="cardChannelPoints"></span>
+        <button class="card-reset" type="button" data-group-reset="channelPoints" data-i18n="resetGroup"></button>
+      </div>
       <label class="opt">
         <input type="checkbox" data-set="channelPoints.enabled">
         <span data-i18n="optPointsAuto"></span>
@@ -98,15 +188,20 @@
       <label class="num">
         <span data-i18n="optScanInterval"></span>
         <input type="number" min="1500" step="500" data-set="channelPoints.scanIntervalMs">
+        <em class="num__def" data-def="channelPoints.scanIntervalMs"></em>
       </label>
       <label class="num">
         <span data-i18n="optClickJitter"></span>
         <input type="number" min="0" step="100" data-set="channelPoints.jitterMs">
+        <em class="num__def" data-def="channelPoints.jitterMs"></em>
       </label>
     </div>
 
-    <div class="card">
-      <div class="card__head" data-i18n="cardWatchHealth"></div>
+    <div class="card" role="group" aria-labelledby="chHealth" data-group="watchHealth">
+      <div class="card__head" id="chHealth">
+        <span data-i18n="cardWatchHealth"></span>
+        <button class="card-reset" type="button" data-group-reset="watchHealth" data-i18n="resetGroup"></button>
+      </div>
       <label class="opt">
         <input type="checkbox" data-set="watchHealth.enabled">
         <span data-i18n="optWatchHealthEnabled"></span>
@@ -130,12 +225,17 @@
       <label class="num">
         <span data-i18n="optWatchHealthStaleMinutes"></span>
         <input type="number" min="2" max="30" step="1" data-set="watchHealth.staleAfterMin">
+        <em class="num__def" data-def="watchHealth.staleAfterMin"></em>
       </label>
       <p class="hint" data-i18n="hintWatchHealth"></p>
     </div>
 
-    <div class="card">
-      <div class="card__head" data-i18n="cardDrops"></div>
+    <div class="card" role="group" aria-labelledby="chDrops" data-group="drops">
+      <div class="card__head" id="chDrops">
+        <span data-i18n="cardDrops"></span>
+        <button class="card-reset" type="button" data-group-reset="drops" data-i18n="resetGroup"></button>
+      </div>
+      <div class="settings-subhead" data-i18n="settingsGroupDropsGeneral"></div>
       <label class="opt">
         <input type="checkbox" data-set="drops.enabled">
         <span data-i18n="optDropsEnabled"></span>
@@ -159,12 +259,49 @@
       <label class="num">
         <span data-i18n="optDropsInterval"></span>
         <input type="number" min="15" step="15" data-set="drops.checkIntervalMin">
+        <em class="num__def" data-def="drops.checkIntervalMin"></em>
+      </label>
+      <div class="settings-subhead hint--farm" data-i18n="settingsGroupDropsAutoFarm"></div>
+      <label class="opt">
+        <input type="checkbox" data-set="drops.autoFarm">
+        <span data-i18n="optDropsAutoFarm"></span>
+      </label>
+      <p class="hint hint--farm" data-i18n="hintAutoFarm"></p>
+      <label class="num hint--farm">
+        <span data-i18n="optDropsProbe"></span>
+        <input type="number" min="2" max="30" step="1" data-set="drops.progressProbeMin">
+        <em class="num__def" data-def="drops.progressProbeMin"></em>
+      </label>
+      <label class="num hint--farm">
+        <span data-i18n="optDropsNoProgress"></span>
+        <input type="number" min="5" max="120" step="5" data-set="drops.noProgressMin">
+        <em class="num__def" data-def="drops.noProgressMin"></em>
+      </label>
+      <label class="num hint--farm">
+        <span data-i18n="optDropsStreamSelection"></span>
+        <select data-set="drops.streamSelection">
+          <option value="first" data-i18n="streamSelectionFirst"></option>
+          <option value="top" data-i18n="streamSelectionTop"></option>
+          <option value="low" data-i18n="streamSelectionLow"></option>
+          <option value="random" data-i18n="streamSelectionRandom"></option>
+        </select>
+      </label>
+      <label class="opt hint--farm">
+        <input type="checkbox" data-set="drops.farmNotifications">
+        <span data-i18n="optDropsFarmNotifications"></span>
+      </label>
+      <label class="opt hint--farm">
+        <input type="checkbox" data-set="drops.includeInStats">
+        <span data-i18n="optDropsIncludeStats"></span>
       </label>
       <p class="hint" data-i18n="hintDrops"></p>
     </div>
 
-    <div class="card">
-      <div class="card__head" data-i18n="cardAutoJoin"></div>
+    <div class="card" role="group" aria-labelledby="chAutoJoin" data-group="autoJoin">
+      <div class="card__head" id="chAutoJoin">
+        <span data-i18n="cardAutoJoin"></span>
+        <button class="card-reset" type="button" data-group-reset="autoJoin" data-i18n="resetGroup"></button>
+      </div>
       <label class="opt">
         <input type="checkbox" data-set="autoJoin.enabled">
         <span data-i18n="optAutoJoinEnabled"></span>
@@ -188,8 +325,11 @@
       <p class="hint" data-i18n="hintAutoJoin"></p>
     </div>
 
-    <div class="card">
-      <div class="card__head" data-i18n="cardAds"></div>
+    <div class="card" role="group" aria-labelledby="chAds" data-group="adMute">
+      <div class="card__head" id="chAds">
+        <span data-i18n="cardAds"></span>
+        <button class="card-reset" type="button" data-group-reset="adMute" data-i18n="resetGroup"></button>
+      </div>
       <label class="opt">
         <input type="checkbox" data-set="adMute.enabled">
         <span data-i18n="optAdMuteEnabled"></span>
@@ -209,8 +349,11 @@
       <p class="hint" data-i18n="hintAdMute"></p>
     </div>
 
-    <div class="card">
-      <div class="card__head" data-i18n="cardViewerStats"></div>
+    <div class="card" role="group" aria-labelledby="chViewer" data-group="viewerStats">
+      <div class="card__head" id="chViewer">
+        <span data-i18n="cardViewerStats"></span>
+        <button class="card-reset" type="button" data-group-reset="viewerStats" data-i18n="resetGroup"></button>
+      </div>
       <label class="opt">
         <input type="checkbox" data-set="viewerStats.enabled">
         <span data-i18n="optViewerStatsEnabled"></span>
@@ -222,11 +365,15 @@
       <label class="num">
         <span data-i18n="optViewerWindow"></span>
         <input type="number" min="1" max="30" step="1" data-set="viewerStats.windowMin">
+        <em class="num__def" data-def="viewerStats.windowMin"></em>
       </label>
     </div>
 
-    <div class="card">
-      <div class="card__head" data-i18n="cardMisc"></div>
+    <div class="card" role="group" aria-labelledby="chMisc">
+      <div class="card__head" id="chMisc">
+        <span data-i18n="cardMisc"></span>
+        <button class="card-reset" type="button" data-group-reset="logLevel" data-i18n="resetGroup"></button>
+      </div>
       <label class="num">
         <span data-i18n="optLogLevel"></span>
         <select data-set="logLevel">
@@ -237,12 +384,17 @@
           <option value="silent">silent</option>
         </select>
       </label>
+    </div>
+
+    <div class="card card--danger card--danger-zone" role="group" aria-labelledby="chDanger">
+      <div class="card__head card__head--danger" id="chDanger" data-i18n="dangerZone"></div>
+      <p class="hint hint--danger" data-i18n="dangerResetHint"></p>
       <button class="btn btn--danger" id="btnReset" data-i18n="btnReset"></button>
     </div>
   </section>
 
   <!-- Viewers -->
-  <section class="pane" data-pane="viewers">
+  <section class="pane" id="pane-viewers" data-pane="viewers" role="tabpanel" aria-labelledby="tab-viewers">
     <div class="notice">
       <b data-i18n="viewerNoticeTitle"></b>
       <span data-i18n="viewerNoticeBody"></span>
@@ -264,7 +416,7 @@
   </section>
 
   <!-- Log -->
-  <section class="pane" data-pane="log">
+  <section class="pane" id="pane-log" data-pane="log" role="tabpanel" aria-labelledby="tab-log">
     <div class="row">
       <button class="btn btn--ghost" id="btnLogTab" data-i18n="btnLogTab"></button>
       <button class="btn btn--ghost" id="btnLogBg" data-i18n="btnLogBackground"></button>

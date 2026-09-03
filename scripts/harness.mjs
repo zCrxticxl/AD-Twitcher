@@ -131,14 +131,17 @@ function watchContentSandbox() {
   };
 }
 
-function watchBackgroundSandbox() {
-  let now = 1000000;
+function watchBackgroundSandbox(options = {}) {
+  let now = options.now || 1000000;
   const data = {};
   const notifications = [];
   const cleared = [];
   const updates = [];
   const reloads = [];
-  class FakeDate extends Date { static now() { return now; } }
+  class FakeDate extends Date {
+    constructor(...args) { super(...(args.length ? args : [now])); }
+    static now() { return now; }
+  }
   const api = {
     storage: {local: {
       get(key) { return Promise.resolve({[key]: data[key]}); },
@@ -174,13 +177,13 @@ function watchBackgroundSandbox() {
         localQueues[key] = run.catch(() => {});
         return run;
       },
-      settings: {get: () => Promise.resolve({
+      settings: {get: () => Promise.resolve(Object.assign({
         enabled: true,
         watchHealth: {
           enabled: true, keepAwake: true, notifications: true,
           recoverTab: true, staleAfterMin: 5
         }
-      })}
+      }, options.settings || {}))}
     }
   };
   sandbox.globalThis = sandbox;
@@ -188,7 +191,8 @@ function watchBackgroundSandbox() {
   vm.createContext(sandbox);
   vm.runInContext(read('src/background/watch-health.js'), sandbox);
   return {
-    sandbox, notifications, cleared, updates, reloads,
+    sandbox, data, notifications, cleared, updates, reloads,
+    now: () => now,
     advance(ms) { now += ms; }
   };
 }
@@ -204,7 +208,8 @@ function watchBackgroundSandbox() {
  *     one reproduces the other thing MV3 does routinely: run this file again
  *     with the previous worker's alarms still scheduled.
  */
-function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
+function swSandbox(storage = {}, tabs = {}, alarmStore = {}, opts = {}) {
+  let now = opts.now || 1000000;
   const alarmCreates = [];
   const messageHandlers = [];
   const timeouts = new Map();
@@ -215,9 +220,41 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
   const removes = [];
   const claims = [];
   const createdTabs = [];
+  const createdTabRecords = [];
   const alarmHandlers = [];
+  const tabRemovedHandlers = [];
+  const candidateScans = [];
+  const categoryResolutions = [];
+  const statBumps = [];
+  const watchHeartbeats = [];
+  const watchForgets = [];
   let claimReport = null;
-  let nextTabId = 99;
+  let candidateReport = opts.candidateReport || {ok: true, candidates: []};
+  let categoryReport = opts.categoryReport || {ok: true, target: null};
+  let nextTabId = opts.nextTabId || 99;
+  class FakeDate extends Date { static now() { return now; } }
+
+  const settings = {
+    enabled: true,
+    logLevel: 'info',
+    drops: {
+      enabled: true, autoClaim: true, openInventoryTab: true,
+      refreshInventory: true, checkIntervalMin: 120, closeAfterMs: 25000,
+      autoFarm: false, progressProbeMin: 5, noProgressMin: 15,
+      streamSelection: 'first', farmNotifications: false
+    },
+    watchHealth: {
+      enabled: true, keepAwake: true, notifications: true,
+      recoverTab: true, staleAfterMin: 5
+    }
+  };
+  const defaultDrops = settings.drops;
+  const defaultWatchHealth = settings.watchHealth;
+  Object.assign(settings, opts.settings || {});
+  settings.drops = Object.assign(defaultDrops,
+    (opts.settings && opts.settings.drops) || {});
+  settings.watchHealth = Object.assign(defaultWatchHealth,
+    (opts.settings && opts.settings.watchHealth) || {});
 
   const api = {
     storage: {
@@ -233,7 +270,9 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
         : Promise.reject(new Error('no tab ' + id)),
       update(id, patch) {
         updates.push({id, patch});
-        if (tabs[id] && patch.muted !== undefined) {
+        if (!tabs[id]) return Promise.reject(new Error('no tab ' + id));
+        Object.assign(tabs[id], patch);
+        if (patch.muted !== undefined) {
           tabs[id].mutedInfo = patch.muted
             ? {muted: true, reason: 'extension', extensionId: 'adt'}
             : {muted: false};
@@ -241,13 +280,18 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
         return Promise.resolve(tabs[id]);
       },
       query: (q) => Promise.resolve(
-        Array.isArray(q.url) ? Object.values(tabs).filter((t) => t.inventory) : []),
-      create: () => {
+        q.url === '*://*.twitch.tv/*'
+          ? Object.values(tabs).filter((t) => /:\/\/[^/]*twitch\.tv\//.test(t.url || ''))
+          : (Array.isArray(q.url) ? Object.values(tabs).filter((t) =>
+            t.inventory || /\/drops\/inventory(?:[?#]|$)/.test(t.url || '')) : [])),
+      create: (props = {}) => {
+        while (tabs[nextTabId]) nextTabId++;
         const id = nextTabId++;
-        // Marked inventory so later queries can find it, like a real tab whose
-        // url is the inventory page.
-        tabs[id] = {id, inventory: true};
+        tabs[id] = Object.assign({id}, props, {
+          inventory: /\/drops\/inventory(?:[?#]|$)/.test(props.url || '')
+        });
         createdTabs.push(id);
+        createdTabRecords.push(tabs[id]);
         return Promise.resolve(tabs[id]);
       },
       // Real Chrome rejects a remove() for an id that is not an open tab -
@@ -259,7 +303,7 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
         return Promise.resolve();
       },
       reload(id) { reloads.push(id); return Promise.resolve(); },
-      onRemoved: {addListener() {}},
+      onRemoved: {addListener(fn) { tabRemovedHandlers.push(fn); }},
       onUpdated: {addListener() {}, removeListener() {}}
     },
     alarms: {
@@ -274,6 +318,7 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
     },
     runtime: {
       id: 'adt',
+      getURL: (path) => 'extension://' + path,
       getManifest: () => ({manifest_version: 3, content_scripts: [{js: [], css: []}]}),
       onMessage: {addListener(fn) { messageHandlers.push(fn); }},
       onInstalled: {addListener() {}},
@@ -282,23 +327,18 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
   };
 
   const sandbox = {
-    globalThis: null, self: null, console, Promise, Number, Date, Object, Array,
+    globalThis: null, self: null, console, Promise, Number, Date: FakeDate,
+    Object, Array, String, Math: Object.create(Math), URL, isFinite,
     setTimeout(fn) { const id = nextTimer++; timeouts.set(id, fn); return id; },
     clearTimeout(id) { timeouts.delete(id); },
     ADT: {
       api,
       log: {debug() {}, info() {}, warn() {}, error() {}, setLevel() {}},
       settings: {
-        get: () => Promise.resolve({
-          enabled: true,
-          logLevel: 'info',
-          drops: {
-            enabled: true, autoClaim: true, openInventoryTab: true,
-            refreshInventory: true, checkIntervalMin: 120, closeAfterMs: 25000
-          }
-        }),
+        get: () => Promise.resolve(settings),
         configSig: () => 'sig',
-        onChange() {}
+        onChange() {},
+        bumpStat(key) { statBumps.push(key); return Promise.resolve(); }
       },
       /*
        * The real one lives in lib/storage.js, which the worker pulls in with
@@ -318,8 +358,17 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
       },
       liveWatch: {forgetTab() {}, status: () => Promise.resolve({})},
       watchHealth: {
-        forgetTab() {},
+        forgetTab(tabId) {
+          watchForgets.push({tabId, heartbeatsAt: watchHeartbeats.length});
+          return Promise.resolve();
+        },
+        handleHeartbeat(report, tabId, trackStats) {
+          watchHeartbeats.push({report, tabId, trackStats});
+          return Promise.resolve();
+        },
         check: () => Promise.resolve(),
+        channelStats: () => Promise.resolve({rows: []}),
+        resetChannelStats: () => Promise.resolve(),
         status: () => Promise.resolve([
           {tabId: 5, channel: 'shroud', playing: true, reason: '', since: 1000,
             lastProgressAt: 2000, lastHeartbeatAt: 2000}
@@ -331,20 +380,35 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
           claims.push(tabId);
           return Promise.resolve(claimReport);
         }
+        if (msg.type === 'adt:scan-drop-candidates') {
+          candidateScans.push(tabId);
+          return Promise.resolve(typeof candidateReport === 'function'
+            ? candidateReport(tabId, tabs[tabId]) : candidateReport);
+        }
+        if (msg.type === 'adt:resolve-drop-category') {
+          categoryResolutions.push({tabId, name: msg.name});
+          return Promise.resolve(categoryReport);
+        }
         return Promise.resolve(null);
       },
-      sleep: () => Promise.resolve()
+      sleep: opts.sleep || (() => Promise.resolve())
     }
   };
   sandbox.globalThis = sandbox;
   sandbox.self = sandbox;
   vm.createContext(sandbox);
+  vm.runInContext(read('src/background/drops-orchestrator.js'), sandbox);
   vm.runInContext(read('src/background/sw.js'), sandbox);
 
   return {
-    storage, tabs, api, updates, reloads, removes, claims, createdTabs,
+    sandbox, storage, tabs, api, settings, updates, reloads, removes, claims, createdTabs,
+    createdTabRecords, candidateScans, categoryResolutions, statBumps, watchHeartbeats,
+    watchForgets,
     alarmCreates, alarmStore,
     setClaimReport(report) { claimReport = report; },
+    setCandidateReport(report) { candidateReport = report; },
+    setCategoryReport(report) { categoryReport = report; },
+    advance(ms) { now += ms; },
     /**
      * The worker answers asynchronously, so the reply is read off the returned
      * handle after settle() rather than from a return value.
@@ -358,6 +422,11 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
     },
     /** Drives the real api.alarms.onAlarm listener sw.js registered. */
     fireAlarm(name) { alarmHandlers.forEach((fn) => fn({name})); },
+    /** Reproduces tabs.onRemoved after Chrome has already destroyed the tab. */
+    fireTabRemoved(id) {
+      delete tabs[id];
+      tabRemovedHandlers.forEach((fn) => fn(id));
+    },
     /** Lets the promise chains inside the worker run to completion. */
     async settle(rounds = 12) {
       for (let i = 0; i < rounds; i++) {
@@ -369,6 +438,45 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}) {
       }
     }
   };
+}
+
+function farmCampaign(key, target, patch = {}) {
+  let targets = [];
+  if (target) {
+    targets = target.startsWith('/directory/')
+      ? [{kind: 'directory', href: target, login: ''}]
+      : [{kind: 'channel', href: '/' + target, login: target}];
+  }
+  return Object.assign({
+    key,
+    name: key.toUpperCase(),
+    endsAt: 0,
+    targets,
+    rewards: [{name: key + '-reward', percent: 20, hours: 1}],
+    candidates: [],
+    discoveredAt: 1,
+    lastSeenAt: 1
+  }, patch);
+}
+
+function farmRuntime(patch = {}) {
+  return Object.assign({
+    version: 2,
+    campaigns: [],
+    queue: [],
+    priority: [],
+    exhausted: [],
+    active: null,
+    ownedTabId: null,
+    ownedTabUrl: '',
+    ownerToken: '',
+    state: 'discovering',
+    nextProbeAt: 0,
+    lastInventoryAt: 0,
+    lastEvent: '',
+    lastEventAt: 0,
+    notificationKey: ''
+  }, patch);
 }
 
 /**
@@ -729,6 +837,32 @@ console.log('\n[lifecycle harness]');
   h.sandbox.ADT.modules.watchHealth.reportNow();
   assert('watchdog reports a playing channel', h.sent[0].playing === true);
   assert('watchdog detects advancing video time', h.sent[1].advancing === true);
+  assert('heartbeat carries the sampled media time used for local watchtime',
+    h.sent[1].mediaTimeMs === 11000 && h.sent[1].sampledAt === 1000000);
+  assert('heartbeat identifies its player source so replacements cannot create time',
+    typeof h.sent[1].sourceId === 'string' && h.sent[1].sourceId.length > 0 &&
+    h.sent[1].playerEpoch === 1);
+  h.advance(20000);
+  h.video.currentTime = 31;
+  h.fire('timeupdate', {target: h.video});
+  h.video.seeking = true;
+  h.fire('seeking', {target: h.video});
+  assert('confirmed playback immediately before a seek is flushed first',
+    h.sent[h.sent.length - 1].playerEpoch === 1 &&
+    h.sent[h.sent.length - 1].mediaTimeMs === 31000 &&
+    h.sent[h.sent.length - 1].advancing === true);
+  h.video.currentTime = 120;
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('seeking starts a fresh player epoch instead of bridging media time',
+    h.sent[h.sent.length - 1].playerEpoch === 2 &&
+    h.sent[h.sent.length - 1].advancing === false &&
+    h.sent[h.sent.length - 1].seeking === true);
+  h.video.seeking = false;
+  h.fire('seeked', {target: h.video});
+  h.sandbox.ADT.modules.watchHealth.reportNow();
+  assert('seek completion creates the final playback anchor',
+    h.sent[h.sent.length - 1].playerEpoch === 3 &&
+    h.sent[h.sent.length - 1].advancing === false);
   h.sandbox.ADT.modules.watchHealth.stop();
   const before = h.sent.length;
   h.sandbox.ADT.modules.watchHealth.reportNow();
@@ -835,6 +969,256 @@ console.log('\n[lifecycle harness]');
     channel: 'testchannel', playing: true, advancing: true
   }, 42);
   assert('advancing playback clears the stale notification', h.cleared.length === 1);
+}
+
+console.log('\n[local channel watch statistics]');
+{
+  const h = watchBackgroundSandbox();
+  const heartbeat = (tabId, mediaTimeMs, extra = {}) =>
+    h.sandbox.ADT.watchHealth.handleHeartbeat(Object.assign({
+      channel: 'alpha', playing: true, advancing: true, userPaused: false,
+      sampledAt: h.now(), mediaTimeMs, sourceId: 'source-a', playerEpoch: 0
+    }, extra), tabId);
+
+  await heartbeat(1, 0);
+  await heartbeat(2, 0);
+  h.advance(20000);
+  await heartbeat(1, 20000);
+  await heartbeat(2, 20000);
+  let stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('overlapping playback in two tabs is counted only once',
+    stats.watchMs === 20000 && stats.rows[0].watchMs === 20000);
+  assert('the first verified interval opens one channel session',
+    stats.sessions === 1 && stats.channels === 1 && stats.topChannel === 'alpha');
+
+  h.advance(20000);
+  await heartbeat(1, 20000, {playing: false, advancing: false, userPaused: true});
+  stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('paused media time adds no watchtime', stats.watchMs === 20000);
+
+  h.advance(20000);
+  await heartbeat(1, 120000, {
+    playing: false, advancing: true, userPaused: true, seeking: true
+  });
+  stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('a forward seek while paused adds no watchtime either', stats.watchMs === 20000);
+
+  h.advance(3 * 60000);
+  await heartbeat(1, 200000);
+  stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('a heartbeat gap over two minutes is used only as a new anchor',
+    stats.watchMs === 20000);
+
+  h.advance(20000);
+  await heartbeat(1, 220000, {sourceId: 'source-b'});
+  stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('a changed media source cannot manufacture playback time',
+    stats.watchMs === 20000);
+  h.advance(20000);
+  await heartbeat(1, 240000, {sourceId: 'source-b'});
+  stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('the new media source accrues time after its own anchor', stats.watchMs === 40000);
+
+  h.advance(6 * 60000);
+  await heartbeat(1, 600000, {sourceId: 'source-b'});
+  h.advance(20000);
+  await heartbeat(1, 620000, {sourceId: 'source-b'});
+  stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('playback returning after the session gap opens a second session',
+    stats.watchMs === 60000 && stats.sessions === 2);
+}
+{
+  const firstSample = new Date(2026, 8, 1, 23, 59, 50).getTime();
+  const h = watchBackgroundSandbox({now: firstSample});
+  const heartbeat = (mediaTimeMs) => h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'midnight', playing: true, advancing: true, userPaused: false,
+    sampledAt: h.now(), mediaTimeMs, sourceId: 'source-midnight', playerEpoch: 0
+  }, 3);
+  await heartbeat(0);
+  h.advance(20000);
+  await heartbeat(20000);
+
+  const all = await h.sandbox.ADT.watchHealth.channelStats('all');
+  const today = await h.sandbox.ADT.watchHealth.channelStats('today');
+  const week = await h.sandbox.ADT.watchHealth.channelStats('week');
+  const month = await h.sandbox.ADT.watchHealth.channelStats('month');
+  assert('an interval crossing midnight is split between local calendar days',
+    all.watchMs === 20000 && today.watchMs === 10000);
+  assert('current week and month aggregate both sides of that midnight',
+    week.watchMs === 20000 && month.watchMs === 20000);
+
+  await h.sandbox.ADT.watchHealth.resetChannelStats();
+  const reset = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('reset removes channel totals and active media anchors',
+    reset.rows.length === 0 &&
+    Object.keys(h.data.watchHealthRuntime.samples || {}).length === 0);
+}
+{
+  const h = watchBackgroundSandbox({settings: {watchHealth: {
+    enabled: false, keepAwake: false, notifications: false,
+    recoverTab: false, staleAfterMin: 5
+  }}});
+  const report = (mediaTimeMs) => h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'readonly', playing: true, advancing: true, userPaused: false,
+    sampledAt: h.now(), mediaTimeMs, sourceId: 'source-readonly', playerEpoch: 0,
+    trackOnly: true
+  }, 4);
+  await report(0);
+  h.advance(20000);
+  await report(20000);
+  const stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('disabling Watch Health also disables personal channel history',
+    stats.watchMs === 0 && stats.rows.length === 0 &&
+    Object.keys(h.data.watchHealthRuntime.samples || {}).length === 0);
+  assert('read-only tracking creates no watchdog tab state or keep-awake update',
+    Object.keys(h.data.watchHealthRuntime.tabs || {}).length === 0 && h.updates.length === 0);
+}
+{
+  const h = watchBackgroundSandbox({settings: {enabled: false}});
+  await h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'disabled', playing: true, advancing: true,
+    sampledAt: h.now(), mediaTimeMs: 0, sourceId: 'source-disabled', playerEpoch: 0
+  }, 5);
+  h.advance(20000);
+  await h.sandbox.ADT.watchHealth.handleHeartbeat({
+    channel: 'disabled', playing: true, advancing: true,
+    sampledAt: h.now(), mediaTimeMs: 20000, sourceId: 'source-disabled', playerEpoch: 0
+  }, 5);
+  const stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('the master switch disables channel tracking too', stats.rows.length === 0);
+}
+{
+  const h = watchBackgroundSandbox();
+  const report = (mediaTimeMs, extra) =>
+    h.sandbox.ADT.watchHealth.handleHeartbeat(Object.assign({
+      channel: 'pause_boundary', playing: true, advancing: false,
+      userPaused: false, seeking: false, sampledAt: h.now(), mediaTimeMs,
+      sourceId: 'pause-source', playerEpoch: 1
+    }, extra || {}), 6);
+  await report(0);
+  h.advance(20000);
+  await report(20000, {playing: false, advancing: true, userPaused: true});
+  const stats = await h.sandbox.ADT.watchHealth.channelStats('all');
+  assert('legitimate playback immediately before a pause is retained',
+    stats.watchMs === 20000 && stats.sessions === 1);
+}
+{
+  const campaign = farmCampaign('owned-stats', 'farm_channel');
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['owned-stats'],
+    ownedTabId: 77, ownedTabUrl: 'https://www.twitch.tv/farm_channel',
+    active: {
+      campaignKey: 'owned-stats', campaignName: 'OWNED', candidateIndex: 0,
+      channel: 'farm_channel', tabId: 77, switchedAt: 900000,
+      lastProgressAt: 900000, unchangedSnapshots: 0,
+      progressVector: 'owned:10', userPaused: false
+    }
+  })};
+  const h = swSandbox(storage, {
+    77: {id: 77, url: 'https://www.twitch.tv/farm_channel'},
+    78: {id: 78, url: 'https://www.twitch.tv/personal_channel'}
+  }, {}, {settings: {drops: {autoFarm: true, autoClaim: false}}});
+  const report = {
+    type: 'adt:watch-heartbeat', channel: 'farm_channel',
+    playing: true, advancing: true, sampledAt: 1000000,
+    mediaTimeMs: 20000, sourceId: 'farm-source', playerEpoch: 1
+  };
+  h.send(report, 77);
+  await h.settle(24);
+  assert('the service worker excludes its owned farming tab from personal stats',
+    h.watchHeartbeats.length === 1 && h.watchHeartbeats[0].trackStats === false);
+
+  h.send(Object.assign({}, report, {channel: 'personal_channel'}), 78);
+  await h.settle(24);
+  assert('a normal user channel remains eligible for personal stats',
+    h.watchHeartbeats.length === 2 && h.watchHeartbeats[1].trackStats === true);
+
+  h.storage.dropsAutomationRuntime.active = null;
+  h.send(report, 77);
+  await h.settle(24);
+  assert('transitional farming ownership still excludes the owned tab',
+    h.watchHeartbeats.length === 3 && h.watchHeartbeats[2].trackStats === false);
+
+  h.sandbox.ADT.dropsOrchestrator.handleHeartbeat = () =>
+    Promise.reject(new Error('ownership unavailable'));
+  h.send(Object.assign({}, report, {channel: 'unknown_owner'}), 78);
+  await h.settle(24);
+  assert('an ownership read failure fails closed for personal statistics',
+    h.watchHeartbeats.length === 4 && h.watchHeartbeats[3].trackStats === false);
+}
+{
+  const storage = {dropsAutomationRuntime: {version: 2, campaigns: [], queue: [],
+    priority: [], selected: [], selectionConfigured: false, exhausted: [],
+    state: 'watching',
+    ownedTabId: 80, ownedTabUrl: 'https://www.twitch.tv/farm_channel',
+    active: {
+      campaignKey: 'owned-stats2', campaignName: 'OWNED2', candidateIndex: 0,
+      channel: 'farm_channel', tabId: 80, switchedAt: 900000,
+      lastProgressAt: 900000, unchangedSnapshots: 0,
+      progressVector: 'owned:10', userPaused: false
+    }
+  }};
+  const h = swSandbox(storage, {
+    80: {id: 80, url: 'https://www.twitch.tv/farm_channel'}
+  }, {}, {settings: {drops: {autoFarm: true, includeInStats: true}}});
+  h.send({
+    type: 'adt:watch-heartbeat', channel: 'farm_channel',
+    playing: true, advancing: true, sampledAt: 1000000,
+    mediaTimeMs: 20000, sourceId: 'farm-source', playerEpoch: 1
+  }, 80);
+  await h.settle(24);
+  assert('includeInStats lets farming streams count toward channel statistics',
+    h.watchHeartbeats.length === 1 && h.watchHeartbeats[0].trackStats === true);
+}
+{
+  const h = swSandbox({}, {90: {id: 90, url: 'https://www.twitch.tv/queue_test'}});
+  let resolveOwnership;
+  h.sandbox.ADT.dropsOrchestrator.handleHeartbeat = () =>
+    new Promise((resolve) => { resolveOwnership = resolve; });
+  h.send({
+    type: 'adt:watch-heartbeat', channel: 'queue_test',
+    playing: true, advancing: true, sampledAt: 1000000,
+    mediaTimeMs: 20000, sourceId: 'queue-source', playerEpoch: 1
+  }, 90);
+  h.send({type: 'adt:watch-stopped'}, 90);
+  await h.settle(12);
+  assert('watch-stopped waits for an earlier ownership check on the same tab',
+    h.watchHeartbeats.length === 0 && h.watchForgets.length === 0);
+
+  resolveOwnership(false);
+  await h.settle(24);
+  assert('the queued heartbeat finishes before teardown',
+    h.watchHeartbeats.length === 1 && h.watchForgets.length === 1 &&
+    h.watchForgets[0].heartbeatsAt === 1);
+}
+{
+  let releaseDiscovery;
+  const discoveryWait = new Promise((resolve) => { releaseDiscovery = resolve; });
+  const ownerUrl = 'https://www.twitch.tv/directory/category/queue-test?filter=drops';
+  const storage = {
+    dropsAutomationRuntime: {
+      version: 2,
+      campaigns: [farmCampaign('queue-test', '/directory/category/queue-test')],
+      queue: ['queue-test'], priority: [], selected: [], selectionConfigured: false,
+      exhausted: [], active: null, ownedTabId: 91, ownedTabUrl: ownerUrl,
+      state: 'discovering', nextProbeAt: 2000000, lastInventoryAt: 1000
+    }
+  };
+  const h = swSandbox(storage, {91: {id: 91, url: ownerUrl}}, {}, {
+    settings: {drops: {autoFarm: true}},
+    sleep: () => discoveryWait
+  });
+  await h.settle(24);
+  h.send({
+    type: 'adt:watch-heartbeat', channel: 'queue_test',
+    playing: true, advancing: true, sampledAt: 1000000,
+    mediaTimeMs: 20000, sourceId: 'queue-source', playerEpoch: 1
+  }, 91);
+  await h.settle(24);
+  assert('slow Drops discovery does not block farming ownership classification',
+    h.watchHeartbeats.length === 1 && h.watchHeartbeats[0].trackStats === false);
+  releaseDiscovery();
+  await h.settle(24);
 }
 
 {
@@ -1514,6 +1898,550 @@ console.log('\n[autoJoin tab ownership]');
   await new Promise((r) => setImmediate(r));
   assert('the channel going offline closes the tab autoJoin opened',
     h.removes.length === 1 && h.removes[0] === h.creates[0].id);
+}
+
+console.log('\n[automatic Drops farming]');
+{
+  const campaign = farmCampaign('safe', 'eligible');
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign],
+    queue: ['safe'],
+    ownedTabId: 7,
+    ownedTabUrl: 'https://www.twitch.tv/previously_owned',
+    nextProbeAt: 2000000
+  })};
+  const tabs = {7: {id: 7, url: 'https://www.twitch.tv/user_channel'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(24);
+
+  assert('a stale ownedTabId never navigates the non-owned tab now using it',
+    tabs[7].url === 'https://www.twitch.tv/user_channel' &&
+    !h.updates.some((update) => update.id === 7));
+  assert('the stale ownership record is replaced with a newly created tab',
+    h.createdTabs.length === 1 &&
+    storage.dropsAutomationRuntime.ownedTabId === h.createdTabs[0] &&
+    storage.dropsAutomationRuntime.active.channel === 'eligible');
+}
+{
+  const empty = farmCampaign('empty', '/directory/category/empty-game');
+  const next = farmCampaign('next', 'second_channel');
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [empty, next],
+    queue: ['empty', 'next'],
+    nextProbeAt: 2000000,
+    lastInventoryAt: 900000
+  })};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}},
+    candidateReport: {ok: true, candidates: []}
+  });
+  await h.settle(30);
+
+  assert('a campaign whose directory has no candidates is marked exhausted',
+    h.candidateScans.length === 1 &&
+    storage.dropsAutomationRuntime.exhausted.includes('empty'));
+  assert('the queue advances to the next campaign after empty discovery',
+    storage.dropsAutomationRuntime.active &&
+    storage.dropsAutomationRuntime.active.campaignKey === 'next' &&
+    storage.dropsAutomationRuntime.active.channel === 'second_channel');
+}
+{
+  const campaign = farmCampaign('rainbow', '/directory/category/rainbow-six-siege', {
+    name: 'Rainbow Six Siege'
+  });
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['rainbow'], nextProbeAt: 2000000
+  })};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}},
+    candidateReport(tabId, tab) {
+      return {
+        ok: true,
+        candidates: /tom-clancys-rainbow-six-siege/.test(tab.url)
+          ? [{href: '/eligible_r6', viewers: 42}] : []
+      };
+    },
+    categoryReport: {
+      ok: true,
+      target: {kind: 'directory', href: '/directory/category/tom-clancys-rainbow-six-siege'}
+    }
+  });
+  await h.settle(40);
+
+  assert('an empty synthetic category resolves its canonical Twitch search result',
+    h.categoryResolutions.length === 1 &&
+    h.categoryResolutions[0].name === 'Rainbow Six Siege');
+  assert('the canonical category is persisted and produces a farming candidate',
+    storage.dropsAutomationRuntime.campaigns[0].targets[0].href ===
+      '/directory/category/tom-clancys-rainbow-six-siege?filter=drops' &&
+    storage.dropsAutomationRuntime.active.channel === 'eligible_r6');
+}
+{
+  const campaign = farmCampaign('random', null, {
+    targets: ['alpha', 'beta', 'gamma'].map((login) => ({
+      kind: 'channel', href: '/' + login, login
+    })),
+    candidates: ['alpha', 'beta', 'gamma'].map((login) => ({
+      href: '/' + login, login, viewers: 0
+    })),
+    candidatesAt: 2000000
+  });
+  const now = 2000000;
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['random'],
+    ownedTabId: 32, ownedTabUrl: 'https://www.twitch.tv/alpha',
+    nextProbeAt: now + 60000,
+    active: {
+      campaignKey: 'random', campaignName: 'RANDOM', candidateIndex: 0,
+      channel: 'alpha', tabId: 32, switchedAt: now - 20 * 60000,
+      lastProgressAt: now - 20 * 60000, unchangedSnapshots: 2,
+      progressVector: 'random-reward:20', userPaused: false
+    }
+  })};
+  const tabs = {32: {id: 32, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    now,
+    settings: {drops: {
+      autoFarm: true, autoClaim: false, streamSelection: 'random'
+    }}
+  });
+  h.sandbox.Math.random = () => 0;
+  await h.settle(30);
+
+  assert('random stream rotation keeps its first ordering while advancing',
+    storage.dropsAutomationRuntime.active.channel === 'beta');
+}
+{
+  const first = farmCampaign('first', 'alpha', {candidates: [
+    {login: 'alpha', href: '/alpha', viewers: 10},
+    {login: 'beta', href: '/beta', viewers: 20}
+  ]});
+  const next = farmCampaign('next', 'gamma');
+  const now = 2000000;
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [first, next],
+    queue: ['first', 'next'],
+    ownedTabId: 31,
+    ownedTabUrl: 'https://www.twitch.tv/beta',
+    nextProbeAt: now + 60000,
+    lastInventoryAt: 1,
+    active: {
+      campaignKey: 'first', campaignName: 'FIRST', candidateIndex: 1,
+      channel: 'beta', tabId: 31, switchedAt: now - 5 * 60000,
+      lastProgressAt: now - 16 * 60000, unchangedSnapshots: 2,
+      progressVector: 'first-reward:20', userPaused: false
+    }
+  })};
+  const tabs = {31: {id: 31, url: 'https://www.twitch.tv/beta'}};
+  const h = swSandbox(storage, tabs, {}, {
+    now,
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(30);
+
+  assert('exhausting every candidate marks the first campaign exhausted',
+    storage.dropsAutomationRuntime.exhausted.includes('first'));
+  assert('candidate exhaustion advances the same owned tab to the next campaign',
+    storage.dropsAutomationRuntime.active &&
+    storage.dropsAutomationRuntime.active.campaignKey === 'next' &&
+    storage.dropsAutomationRuntime.ownedTabId === 31 &&
+    /twitch\.tv\/gamma\?adt_farm=/.test(tabs[31].url || ''));
+}
+{
+  const campaign = farmCampaign('replace', 'alpha', {candidates: [
+    {login: 'alpha', href: '/alpha', viewers: 1}
+  ]});
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign],
+    queue: ['replace'],
+    ownedTabId: 41,
+    ownedTabUrl: 'https://www.twitch.tv/alpha',
+    nextProbeAt: 2000000,
+    active: {
+      campaignKey: 'replace', campaignName: 'REPLACE', candidateIndex: 0,
+      channel: 'alpha', tabId: 41, switchedAt: 1000000,
+      lastProgressAt: 1000000, unchangedSnapshots: 0,
+      progressVector: 'replace-reward:20', userPaused: false
+    }
+  })};
+  const tabs = {41: {id: 41, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle();
+  h.fireTabRemoved(41);
+  await h.settle(24);
+
+  assert('closing the owned farming tab creates a replacement',
+    h.createdTabs.length === 1 &&
+    storage.dropsAutomationRuntime.ownedTabId === h.createdTabs[0]);
+  assert('the replacement resumes the interrupted campaign',
+    storage.dropsAutomationRuntime.active &&
+    storage.dropsAutomationRuntime.active.campaignKey === 'replace' &&
+    storage.dropsAutomationRuntime.active.channel === 'alpha');
+}
+{
+  const future = 1600000;
+  const storage = {dropsAutomationRuntime: farmRuntime({nextProbeAt: future})};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(24);
+
+  assert('resume preserves a future nextProbeAt',
+    storage.dropsAutomationRuntime.nextProbeAt === future);
+  assert('resume does not probe inventory before nextProbeAt',
+    h.createdTabRecords.length === 0 && !storage.activityRuntime);
+}
+{
+  const campaign = farmCampaign('restored', 'alpha');
+  const token = 'restore-token';
+  const marked = 'https://www.twitch.tv/alpha?adt_farm=' + token;
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['restored'],
+    ownedTabId: 41, ownedTabUrl: marked, ownerToken: token,
+    nextProbeAt: 2000000,
+    active: {campaignKey: 'restored', channel: 'alpha', tabId: 41}
+  })};
+  const tabs = {81: {id: 81, url: marked}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(30);
+
+  assert('a marked farming tab is recovered after its restored id changes',
+    storage.dropsAutomationRuntime.ownedTabId === 81 &&
+    storage.dropsAutomationRuntime.active.tabId === 81);
+  assert('recovering a marked farming tab creates no duplicate',
+    h.createdTabs.length === 0 && Object.keys(tabs).length === 1);
+}
+{
+  const campaign = farmCampaign('unmarked', 'alpha');
+  const token = 'missing-token';
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['unmarked'],
+    ownedTabId: 42,
+    ownedTabUrl: 'https://www.twitch.tv/alpha?adt_farm=' + token,
+    ownerToken: token, nextProbeAt: 2000000,
+    active: {campaignKey: 'unmarked', channel: 'alpha', tabId: 42}
+  })};
+  const tabs = {82: {id: 82, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(30);
+
+  assert('an unmarked user tab on the same channel is never adopted',
+    tabs[82].url === 'https://www.twitch.tv/alpha' &&
+    storage.dropsAutomationRuntime.ownedTabId !== 82);
+  assert('a replacement farming tab carries a private ownership marker',
+    h.createdTabs.length === 1 &&
+    /[?&]adt_farm=/.test(tabs[h.createdTabs[0]].url || ''));
+}
+{
+  let releaseSleep;
+  const sleepGate = new Promise((resolve) => { releaseSleep = resolve; });
+  const campaign = farmCampaign('slow', '/directory/category/slow-game');
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['slow'], nextProbeAt: 2000000
+  })};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}},
+    sleep: () => sleepGate,
+    candidateReport: {ok: true, candidates: []}
+  });
+  await h.settle(12);
+  h.settings.drops.autoFarm = false;
+  const settingsTick = h.sandbox.ADT.dropsOrchestrator.tick(true);
+  releaseSleep();
+  await settingsTick;
+  await h.settle(30);
+
+  assert('a settings tick queued during discovery is applied immediately afterwards',
+    storage.dropsAutomationRuntime.state === 'off' &&
+    storage.dropsAutomationRuntime.active === null &&
+    storage.dropsAutomationRuntime.ownedTabId === null);
+}
+{
+  const campaign = farmCampaign('disabled', 'alpha');
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['disabled'],
+    ownedTabId: 51, ownedTabUrl: 'https://www.twitch.tv/alpha',
+    nextProbeAt: 2000000,
+    active: {campaignKey: 'disabled', channel: 'alpha', tabId: 51}
+  })};
+  const tabs = {51: {id: 51, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: false}}
+  });
+  await h.settle(24);
+
+  assert('disabling farming closes only its verified owned tab',
+    h.removes.length === 1 && h.removes[0] === 51 && !tabs[51]);
+  assert('disabled farming clears active ownership and records off state',
+    storage.dropsAutomationRuntime.state === 'off' &&
+    storage.dropsAutomationRuntime.active === null &&
+    storage.dropsAutomationRuntime.ownedTabId === null);
+}
+{
+  const campaign = farmCampaign('gone', 'alpha');
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['gone'], selected: ['gone'],
+    selectionConfigured: true,
+    ownedTabId: 53, ownedTabUrl: 'https://www.twitch.tv/alpha',
+    nextProbeAt: 2000000, lastInventoryAt: 900000,
+    active: {campaignKey: 'gone', channel: 'alpha', tabId: 53}
+  })};
+  const tabs = {53: {id: 53, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(24);
+  h.send({
+    type: 'adt:drops-progress', read: true, items: [], campaigns: []
+  }, 54);
+  await h.settle(30);
+
+  assert('an authoritative empty inventory does not resurrect a selected campaign',
+    storage.dropsAutomationRuntime.campaigns.length === 0 &&
+    storage.dropsAutomationRuntime.queue.length === 0);
+  assert('a campaign gone from inventory releases its farming tab immediately',
+    storage.dropsAutomationRuntime.active === null &&
+    storage.dropsAutomationRuntime.ownedTabId === null && !tabs[53]);
+}
+{
+  const complete = farmCampaign('complete', 'alpha', {
+    rewards: [{name: 'complete-reward', percent: 100, hours: 1}]
+  });
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [complete], queue: ['complete'],
+    ownedTabId: 52, ownedTabUrl: 'https://www.twitch.tv/alpha',
+    nextProbeAt: 2000000, lastInventoryAt: 900000,
+    active: {campaignKey: 'complete', channel: 'alpha', tabId: 52}
+  })};
+  const tabs = {52: {id: 52, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(24);
+
+  assert('true campaign completion closes the owned farming tab',
+    h.removes.length === 1 && h.removes[0] === 52 && !tabs[52]);
+  assert('an inventory-confirmed finished queue reaches complete state',
+    storage.dropsAutomationRuntime.state === 'complete' &&
+    storage.dropsAutomationRuntime.active === null);
+}
+{
+  const storage = {dropsAutomationRuntime: farmRuntime()};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(30);
+
+  const inventory = h.createdTabRecords.find((tab) =>
+    /\/drops\/inventory$/.test(tab.url || ''));
+  assert('farm progress probes still open inventory when autoClaim is disabled',
+    !!inventory);
+  assert('the autoClaim-disabled farm probe is recorded as a farm check, not off',
+    storage.activityRuntime && storage.activityRuntime.trigger === 'farm' &&
+    storage.activityRuntime.outcome === 'opened');
+}
+{
+  const campaign = farmCampaign('legacy', 'alpha');
+  const active = {
+    campaignKey: 'legacy', campaignName: 'LEGACY', candidateIndex: 0,
+    channel: 'alpha', tabId: 61, switchedAt: 1000000,
+    lastProgressAt: 1000000, unchangedSnapshots: 0,
+    progressVector: 'legacy-reward:20', userPaused: false
+  };
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [campaign], queue: ['legacy'], active,
+    ownedTabId: 61, ownedTabUrl: 'https://www.twitch.tv/alpha',
+    nextProbeAt: 2000000
+  })};
+  const tabs = {61: {id: 61, url: 'https://www.twitch.tv/alpha'}};
+  const h = swSandbox(storage, tabs, {}, {
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle();
+  h.send({
+    type: 'adt:drops-progress', read: true,
+    items: [{name: 'legacy reward', campaign: 'LEGACY', percent: 21, hours: 1}]
+  }, 62);
+  await h.settle(24);
+
+  assert('legacy drops-progress without campaigns preserves farm campaigns',
+    storage.dropsAutomationRuntime.campaigns.length === 1 &&
+    storage.dropsAutomationRuntime.campaigns[0].key === 'legacy');
+  assert('legacy drops-progress without campaigns preserves the active farm runtime',
+    storage.dropsAutomationRuntime.active &&
+    storage.dropsAutomationRuntime.active.campaignKey === 'legacy' &&
+    storage.dropsAutomationRuntime.ownedTabId === 61);
+}
+{
+  const soon = farmCampaign('soon', 'a', {endsAt: 1100000});
+  const later = farmCampaign('later', 'b', {endsAt: 1200000});
+  const undated = farmCampaign('undated', 'c', {endsAt: 0});
+  const expired = farmCampaign('expired', 'd', {endsAt: 900000});
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [undated, later, soon],
+    queue: ['undated', 'later', 'soon'],
+    nextProbeAt: 2000000
+  })};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: false}}
+  });
+  await h.settle();
+  const ranked = h.sandbox.ADT.dropsOrchestrator.rankQueue(
+    [expired, undated, later, soon], []);
+  assert('default queue ranking puts the nearest known expiry first',
+    Array.from(ranked).join(',') === 'soon,later,undated');
+  assert('expired campaigns are not put back into the farming queue',
+    !Array.from(ranked).includes('expired'));
+
+  const reply = h.send({type: 'adt:farm-priority', key: 'soon', direction: 1}, 1);
+  await h.settle(24);
+  assert('manual queue movement is acknowledged by the background router',
+    reply.response && reply.response.ok === true);
+  assert('manual movement persists the requested queue order',
+    storage.dropsAutomationRuntime.queue.join(',') === 'later,soon,undated' &&
+    storage.dropsAutomationRuntime.priority.join(',') === 'later,soon,undated');
+}
+{
+  const now = 1000000;
+  const expired = farmCampaign('expired-active', 'old_channel', {endsAt: now - 1});
+  const valid = farmCampaign('still-live', 'next_channel', {endsAt: now + 60000});
+  const storage = {dropsAutomationRuntime: farmRuntime({
+    campaigns: [expired, valid], queue: ['expired-active', 'still-live'],
+    ownedTabId: 70, ownedTabUrl: 'https://www.twitch.tv/old_channel',
+    nextProbeAt: now + 60000,
+    active: {
+      campaignKey: 'expired-active', campaignName: 'EXPIRED-ACTIVE', candidateIndex: 0,
+      channel: 'old_channel', tabId: 70, switchedAt: now,
+      lastProgressAt: now, unchangedSnapshots: 0,
+      progressVector: 'expired-active-reward:20', userPaused: false
+    }
+  })};
+  const tabs = {70: {id: 70, url: 'https://www.twitch.tv/old_channel'}};
+  const h = swSandbox(storage, tabs, {}, {
+    now,
+    settings: {drops: {autoFarm: true, autoClaim: false}}
+  });
+  await h.settle(30);
+
+  assert('an active campaign is abandoned as soon as its expiry leaves the queue',
+    storage.dropsAutomationRuntime.active &&
+    storage.dropsAutomationRuntime.active.campaignKey === 'still-live' &&
+    storage.dropsAutomationRuntime.active.channel === 'next_channel');
+}
+{
+  const storage = {dropsAutomationRuntime: farmRuntime({nextProbeAt: 2000000})};
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: false, autoClaim: false}}
+  });
+  await h.settle();
+
+  const catalogReply = h.send({
+    type: 'adt:drops-campaigns-found',
+    read: true,
+    campaigns: [{
+      key: 'campaign:marvel-rivals',
+      name: 'Marvel Rivals',
+      publisher: 'Marvel Rivals',
+      targets: [{kind: 'directory', href: '/directory/category/marvel-rivals?filter=drops'}],
+      rewards: []
+    }]
+  }, 1);
+  await h.settle(24);
+  assert('the campaigns page catalog is accepted without inventory progress bars',
+    catalogReply.response && catalogReply.response.ok === true &&
+    storage.dropsCampaignCatalog.items.length === 1 &&
+    storage.dropsCampaignCatalog.items[0].key === 'campaign:marvel-rivals');
+
+  h.send({type: 'adt:drops-campaigns-found', campaigns: [], read: false}, 1);
+  await h.settle(24);
+  assert('an empty transient campaign scan preserves the last good catalog',
+    storage.dropsCampaignCatalog.items.length === 1 &&
+    storage.dropsCampaignCatalog.items[0].key === 'campaign:marvel-rivals');
+
+  const statusReply = h.send({type: 'adt:status'}, 1);
+  await h.settle(24);
+  assert('the popup status exposes available campaigns from the separate catalog',
+    statusReply.response && statusReply.response.farm &&
+    statusReply.response.farm.availableCampaigns.length === 1 &&
+    statusReply.response.farm.availableCampaigns[0].publisher === 'Marvel Rivals');
+
+  const selectionReply = h.send({
+    type: 'adt:farm-set-priority', keys: ['campaign:marvel-rivals']
+  }, 1);
+  await h.settle(30);
+  assert('applying catalog choices persists the explicit selection',
+    selectionReply.response && selectionReply.response.ok === true &&
+    storage.dropsCampaignCatalog.selected.join(',') === 'campaign:marvel-rivals' &&
+    storage.dropsAutomationRuntime.selected.join(',') === 'campaign:marvel-rivals');
+  assert('only selected catalog campaigns enter the farming queue',
+    storage.dropsAutomationRuntime.queue.join(',') === 'campaign:marvel-rivals' &&
+    storage.dropsAutomationRuntime.selectionConfigured === true);
+
+  storage.dropsAutomationRuntime.active = {
+    campaignKey: 'campaign:marvel-rivals', channel: 'marvelrivals', tabId: 8
+  };
+  h.send({type: 'adt:farm-set-priority', keys: []}, 1);
+  await h.settle(30);
+  assert('deselecting the active campaign stops it immediately',
+    storage.dropsAutomationRuntime.active === null &&
+    storage.dropsAutomationRuntime.queue.length === 0);
+}
+{
+  const oldItems = Array.from({length: 12}, (_, index) => ({
+    key: 'old-' + index,
+    name: 'Old ' + index,
+    targets: [{kind: 'channel', href: '/old_' + index}],
+    rewards: []
+  }));
+  const storage = {
+    dropsAutomationRuntime: farmRuntime({nextProbeAt: 2000000}),
+    dropsCampaignCatalog: {
+      items: oldItems, selected: ['old-11'], scanning: false,
+      startedAt: 0, scannedAt: 1, error: ''
+    }
+  };
+  const h = swSandbox(storage, {}, {}, {
+    settings: {drops: {autoFarm: false, autoClaim: false}}
+  });
+  await h.settle();
+  const small = [0, 1, 2].map((index) => ({
+    key: 'new-' + index,
+    name: 'New ' + index,
+    targets: [{kind: 'channel', href: '/new_' + index}],
+    rewards: []
+  }));
+  h.send({
+    type: 'adt:drops-campaigns-found', campaigns: small, read: true
+  }, 1);
+  await h.settle(24);
+
+  assert('an authoritative small catalog replaces stale campaigns',
+    storage.dropsCampaignCatalog.items.map((item) => item.key).join(',') ===
+      'new-0,new-1,new-2');
+  assert('catalog replacement removes stale selections',
+    storage.dropsCampaignCatalog.selected.length === 0);
+
+  h.send({
+    type: 'adt:drops-campaigns-found', campaigns: [], read: false
+  }, 1);
+  await h.settle(24);
+  assert('an unread catalog scan preserves the last authoritative result',
+    storage.dropsCampaignCatalog.items.length === 3);
+
+  h.send({
+    type: 'adt:drops-campaigns-found', campaigns: [], read: true
+  }, 1);
+  await h.settle(24);
+  assert('an authoritative empty catalog clears stale campaigns',
+    storage.dropsCampaignCatalog.items.length === 0);
 }
 
 console.log('\n[inventory tab open race]');

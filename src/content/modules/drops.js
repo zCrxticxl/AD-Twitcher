@@ -16,8 +16,9 @@
  * which cost Bits. Outside /drops/ there is no click path left at all, not
  * even a narrow one.
  *
- * Progress itself is still counted server-side from player heartbeats. This
- * module claims drops, it does not farm them.
+ * Twitch still owns server-side progress. Together with the background
+ * orchestrator this module discovers campaigns, supplies eligible stream
+ * targets, keeps progress observable and verifies completed claims.
  */
 (function () {
   'use strict';
@@ -267,6 +268,27 @@
   /** @const {string} The row of cards belonging to one campaign. */
   var CAMPAIGN_ROW = '.tw-tower';
 
+  /** @const {!Array<string>} Stream cards on a Drops-filtered category page. */
+  var DIRECTORY_CHANNEL_SELECTORS = [
+    '[data-a-target="preview-card-channel-link"][href^="/"]',
+    'article a[href^="/"]',
+    'a[data-test-selector*="channel" i][href^="/"]'
+  ];
+
+  /** @const {!Array<string>} Viewer count inside a Twitch stream card. */
+  var VIEWER_COUNT_SELECTORS = [
+    '[data-a-target="animated-channel-viewers-count"]',
+    '[data-a-target="preview-card-viewers-count"]',
+    '.tw-media-card-stat'
+  ];
+
+  /** @const {!Array<string>} Twitch routes that are not channel logins. */
+  var RESERVED_ROUTES = [
+    'directory', 'downloads', 'drops', 'following', 'inventory', 'jobs',
+    'login', 'p', 'search', 'settings', 'signup', 'subscriptions', 'turbo',
+    'u', 'videos', 'wallet'
+  ];
+
   /**
    * @param {string} text A progress caption.
    * @return {?{percent: number, hours: number}} Null when the text carries no
@@ -418,6 +440,68 @@
   }
 
   /**
+   * @param {string} href
+   * @return {?{kind: string, href: string}}
+   */
+  function campaignTarget(href) {
+    try {
+      var parsed = new URL(href, location.origin);
+      if (!/(^|\.)twitch\.tv$/i.test(parsed.hostname)) return null;
+      var path = parsed.pathname.replace(/\/+$/, '') || '/';
+      if (/^\/directory\/category\/[a-z0-9_%.-]+$/i.test(path)) {
+        return { kind: 'directory', href: path + parsed.search };
+      }
+      var match = path.match(/^\/([a-z0-9_]{2,50})$/i);
+      if (!match || RESERVED_ROUTES.indexOf(match[1].toLowerCase()) >= 0) return null;
+      return { kind: 'channel', href: '/' + match[1].toLowerCase() };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** @param {!Element} bar @return {!Array<!Object>} */
+  function campaignTargets(bar) {
+    var block = campaignBlock(bar);
+    if (!block || typeof block.querySelectorAll !== 'function') return [];
+    var out = [];
+    var links = block.querySelectorAll('a[href]');
+    for (var i = 0; i < links.length; i++) {
+      var target = campaignTarget(links[i].getAttribute('href') || '');
+      if (!target || out.some(function (item) { return item.href === target.href; })) continue;
+      out.push(target);
+    }
+    return out.slice(0, 20);
+  }
+
+  /** @param {!Element} bar @return {string} */
+  function campaignKey(bar) {
+    var block = campaignBlock(bar);
+    if (block && typeof block.querySelectorAll === 'function') {
+      var links = block.querySelectorAll('a[href*="dropID="], a[href*="dropId="]');
+      for (var i = 0; i < links.length; i++) {
+        try {
+          var parsed = new URL(links[i].getAttribute('href') || '', location.origin);
+          var id = parsed.searchParams.get('dropID') || parsed.searchParams.get('dropId');
+          if (id) return 'drop:' + String(id).slice(0, 120);
+        } catch (e) {}
+      }
+    }
+    return (campaignName(bar) + '|' + campaignTargets(bar).map(function (item) {
+      return item.href;
+    }).sort().join('|')).toLowerCase().replace(/[^a-z0-9|/_?=&.-]+/g, '-').slice(0, 180);
+  }
+
+  /** @param {!Element} bar @return {number} */
+  function campaignEndsAt(bar) {
+    var block = campaignBlock(bar);
+    if (!block || typeof block.querySelector !== 'function') return 0;
+    var time = block.querySelector('time[datetime]');
+    if (!time) return 0;
+    var parsed = Date.parse(time.getAttribute('datetime') || '');
+    return isFinite(parsed) ? parsed : 0;
+  }
+
+  /**
    * An active campaign says where to earn it: its block links to the
    * participating channels or to the game's directory page. A campaign that has
    * ended keeps its cards and its "about this drop" link, but loses that
@@ -428,15 +512,119 @@
    * @return {boolean} True when nothing on this campaign can progress any more.
    */
   function campaignIsOver(bar) {
-    var block = campaignBlock(bar);
-    if (!block || typeof block.querySelectorAll !== 'function') return false;
+    return campaignTargets(bar).length === 0;
+  }
 
-    var links = block.querySelectorAll('a[href]');
-    for (var i = 0; i < links.length; i++) {
-      var href = links[i].getAttribute('href') || '';
-      if (href.charAt(0) === '/' || href.indexOf('twitch.tv/') >= 0) return false;
+  /**
+   * Scan the /drops/campaigns page for available campaigns.
+   * Twitch renders campaigns as accordion headers with a game image, name,
+   * publisher, and date range. No dropID links are exposed on this page.
+   * @return {{campaigns: !Array<!Object>, read: boolean}}
+   */
+  function scanCampaigns() {
+    if (!/^\/drops\/campaigns/.test(location.pathname)) {
+      return { campaigns: [], read: false };
     }
-    return true;
+    var content = document.querySelector('[class*="drops-root__content"]');
+    if (!content) return { campaigns: [], read: false };
+
+    // The largest accordion group is Twitch's active Drops campaign list. This
+    // excludes the smaller reward promotion and completed-campaign groups.
+    var container = null;
+    var largest = 0;
+    for (var c = 0; c < content.children.length; c++) {
+      var child = content.children[c];
+      if (!child.querySelectorAll) continue;
+      var count = child.querySelectorAll('[role="heading"][aria-level="3"]').length;
+      if (count > largest) {
+        largest = count;
+        container = child;
+      }
+    }
+    if (!container) return { campaigns: [], read: false };
+
+    var seen = {};
+    var out = [];
+    var headers = container.querySelectorAll('[role="heading"][aria-level="3"]');
+    headers.forEach(function (header) {
+        if (out.length >= 150) return;
+        var card = header.closest('[class*="Layout"]') || header.parentElement;
+        if (!card) return;
+
+        // Game name from the first <p> with substantial text
+        var name = '';
+        var paragraphs = card.querySelectorAll('p');
+        for (var p = 0; p < paragraphs.length; p++) {
+          var t = (paragraphs[p].textContent || '').trim();
+          if (t && t.length > 1 && t.length <= 120) { name = t; break; }
+        }
+        if (!name) {
+          var img = card.querySelector('img[alt]');
+          if (img) name = (img.getAttribute('alt') || '').trim();
+        }
+        if (!name) return;
+
+        // Publisher from the second <p>
+        var publisher = '';
+        if (paragraphs.length > 1) {
+          publisher = (paragraphs[1].textContent || '').trim();
+        }
+
+        // Date range from the text containing a dash between dates
+        var dateRange = '';
+        var allText = card.querySelectorAll('div');
+        for (var d = 0; d < allText.length; d++) {
+          var dt = (allText[d].textContent || '').trim();
+          if (dt && dt.length < 160 && /\d.*\s-\s.*\d/.test(dt)) {
+            dateRange = dt;
+            break;
+          }
+        }
+
+        // Parse end date from the range
+        var endsAt = 0;
+        if (dateRange) {
+          var parts = dateRange.split(' - ');
+          if (parts.length === 2) {
+            var endStr = parts[1].trim();
+            var parsed = Date.parse(endStr);
+            if (isFinite(parsed)) endsAt = parsed;
+          }
+        }
+
+        var identity = name + '|' + publisher + '|' + dateRange;
+        var hash = 2166136261;
+        for (var h = 0; h < identity.length; h++) {
+          hash ^= identity.charCodeAt(h);
+          hash = Math.imul(hash, 16777619);
+        }
+        var asciiName = typeof name.normalize === 'function'
+          ? name.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : name;
+        var slug = asciiName.toLowerCase()
+          .replace(/['’]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+          .slice(0, 100);
+        var key = 'campaign:' + (slug || 'item') + '-' + (hash >>> 0).toString(36);
+        if (seen[key]) return;
+        seen[key] = true;
+
+        out.push({
+          key: key,
+          name: name,
+          publisher: publisher,
+          dateRange: dateRange,
+          endsAt: endsAt,
+          targets: slug
+            ? [{ kind: 'directory', href: '/directory/category/' + slug + '?filter=drops' }]
+            : [],
+          rewards: []
+        });
+    });
+    return { campaigns: out, read: true };
+  }
+
+  /** @return {!Array<!Object>} */
+  function collectCampaigns() {
+    return scanCampaigns().campaigns;
   }
 
   /*
@@ -473,14 +661,15 @@
   }
 
   /**
-   * @return {{items: !Array<!Object>, read: boolean}} One entry per drop in
+   * @return {{items: !Array<!Object>, campaigns: !Array<!Object>, read: boolean}}
+   *     One entry per drop in
    *     progress, and whether the inventory was actually read. The two are not
    *     the same answer: no items with `read` set means every campaign on the
    *     page has retired, while no items without it means the scan found
    *     nothing to go on and the last known snapshot is still the better one.
    */
   function collectProgress() {
-    if (state.mode !== 'claim') return { items: [], read: false };
+    if (state.mode !== 'claim') return { items: [], campaigns: [], read: false };
     retiredBlocks.length = 0;
     retiredAnswers.length = 0;
     var root = D.qAny(INVENTORY_ROOTS) || document.body;
@@ -516,6 +705,9 @@
       out.push({
         name: cardName(bar),
         campaign: campaignName(bar),
+        campaignKey: campaignKey(bar),
+        targets: campaignTargets(bar),
+        endsAt: campaignEndsAt(bar),
         percent: percent,
         hours: parsed ? parsed.hours : 0,
         retired: campaignIsRetired(bar),
@@ -545,17 +737,37 @@
      * running ones rather than as rows, so filtering them out here would only
      * take away information the display can present cheaply.
      */
-    return {
-      read: out.length > 0,
-      items: live.map(function (item) {
-        return {
-          name: item.name,
-          campaign: item.campaign,
-          percent: item.percent,
-          hours: item.hours
+    var publicItems = live.map(function (item) {
+      return {
+        name: item.name,
+        campaign: item.campaign,
+        percent: item.percent,
+        hours: item.hours
+      };
+    });
+    var campaigns = [];
+    live.forEach(function (item) {
+      var campaign = campaigns.find(function (entry) {
+        return entry.key === item.campaignKey;
+      });
+      if (!campaign) {
+        campaign = {
+          key: item.campaignKey,
+          name: item.campaign,
+          endsAt: item.endsAt,
+          targets: item.targets,
+          rewards: []
         };
-      })
-    };
+        campaigns.push(campaign);
+      }
+      campaign.rewards.push({
+        name: item.name,
+        percent: item.percent,
+        hours: item.hours
+      });
+    });
+
+    return { read: out.length > 0, items: publicItems, campaigns: campaigns };
   }
 
   /** Sends the current progress snapshot, if the page yielded one. */
@@ -570,7 +782,94 @@
      * says nothing about the drops and must leave the stored one alone.
      */
     if (!scan.read) return;
-    g.ADT.send({ type: 'adt:drops-progress', items: scan.items, read: true });
+    g.ADT.send({
+      type: 'adt:drops-progress',
+      items: scan.items,
+      campaigns: scan.campaigns,
+      read: true
+    });
+  }
+
+  /** @const {!Array<{rx: !RegExp, mult: number}>} */
+  var DIRECTORY_COUNT_SCALES = [
+    { rx: /^(亿|億)$/, mult: 1e8 },
+    { rx: /^(万|萬|만)$/, mult: 1e4 },
+    { rx: /^(m|mln\.?|mio\.?|млн\.?|milhões|milhoes|millones|百万)$/, mult: 1e6 },
+    { rx: /^(k|tys\.?|тыс\.?|mil|bin|천)$/, mult: 1e3 }
+  ];
+
+  /** @param {string} value @return {number} */
+  function compactNumber(value) {
+    var match = String(value || '').replace(/\s+/g, '').match(/(\d[\d.,]*)([^\d.,]*)/);
+    if (!match) return 0;
+    var suffix = (match[2] || '').toLowerCase();
+    var mult = 1;
+    for (var i = 0; i < DIRECTORY_COUNT_SCALES.length; i++) {
+      if (DIRECTORY_COUNT_SCALES[i].rx.test(suffix)) {
+        mult = DIRECTORY_COUNT_SCALES[i].mult;
+        break;
+      }
+    }
+    if (mult > 1) {
+      var compact = parseFloat(match[1].replace(',', '.'));
+      return isNaN(compact) ? 0 : Math.round(compact * mult);
+    }
+    var full = parseInt(match[1].replace(/[.,]/g, ''), 10);
+    return isNaN(full) ? 0 : full;
+  }
+
+  /**
+   * Read-only candidate discovery on a Drops-filtered Twitch category page.
+   * @return {!Array<!Object>}
+   */
+  function collectCandidates() {
+    if (!/^\/directory\/category\//.test(location.pathname)) return [];
+    // Keep the left navigation out: on an invalid category Twitch still shows
+    // followed channels there, which are unrelated to the Drops campaign.
+    var root = document.querySelector("main");
+    if (!root) return [];
+    var nodes = D.qaAny(DIRECTORY_CHANNEL_SELECTORS, root);
+    var seen = {};
+    var out = [];
+    nodes.forEach(function (link) {
+      if (out.length >= 40) return;
+      var target = campaignTarget(link.getAttribute('href') || '');
+      if (!target || target.kind !== 'channel') return;
+      var login = target.href.slice(1);
+      if (seen[login]) return;
+      seen[login] = true;
+      var card = typeof link.closest === 'function' ? link.closest('article') : null;
+      var viewerCount = card && D.qAny(VIEWER_COUNT_SELECTORS, card);
+      out.push({
+        href: target.href,
+        login: login,
+        viewers: compactNumber(viewerCount && viewerCount.textContent)
+      });
+    });
+    return out;
+  }
+
+  /**
+   * Resolve Twitch's canonical category route from a normal search results
+   * page. Campaign names and category slugs are not always equivalent (for
+   * example, Rainbow Six Siege uses tom-clancys-rainbow-six-siege).
+   * @param {string} name
+   * @return {?Object}
+   */
+  function collectCategoryTarget(name) {
+    if (!/^\/search/.test(location.pathname)) return null;
+    var wanted = String(name || '').trim().toLowerCase();
+    if (!wanted) return null;
+    var links = document.querySelectorAll('a[href*="/directory/category/"]');
+    for (var i = 0; i < links.length; i++) {
+      var label = (links[i].textContent || '').trim();
+      var image = links[i].querySelector('img[alt]');
+      var alt = image ? (image.getAttribute('alt') || '').trim() : '';
+      if (label.toLowerCase() !== wanted && alt.toLowerCase() !== wanted) continue;
+      var target = campaignTarget(links[i].getAttribute('href') || '');
+      if (target && target.kind === 'directory') return target;
+    }
+    return null;
   }
 
   var state = {
@@ -614,6 +913,33 @@
     });
   }
 
+  /** @param {!Element} button @return {!Object} */
+  function claimInfo(button) {
+    var node = button.parentElement;
+    for (var up = 0; up < 6 && node; up++) {
+      var bar = node.querySelector && node.querySelector(PROGRESS_BAR_SELECTORS.join(','));
+      if (bar) {
+        return {
+          campaign: campaignName(bar),
+          reward: cardName(bar),
+          campaignKey: campaignKey(bar)
+        };
+      }
+      node = node.parentElement;
+    }
+    return { campaign: '', reward: D.textOf(button), campaignKey: 'unknown' };
+  }
+
+  /** @param {!Element} button @param {string} initialLabel @return {boolean} */
+  function claimWasAccepted(button, initialLabel) {
+    if (!button.isConnected || button.disabled ||
+        button.getAttribute('aria-disabled') === 'true' || !D.isVisible(button)) return true;
+    var normalize = function (value) {
+      return String(value || '').replace(/\s+/g, ' ').trim().toLocaleLowerCase();
+    };
+    return normalize(D.textOf(button)) !== normalize(initialLabel);
+  }
+
   /** @return {boolean} True when a reload could still reveal new claim buttons. */
   function viewIsStale() {
     return state.mode === 'claim' &&
@@ -644,10 +970,39 @@
         state.pendingTimers = state.pendingTimers.filter(function (id) { return id !== timer; });
         if (!state.running || state.mode !== 'claim' || !onInventoryPage()) return;
         if (!btn.isConnected || !D.isVisible(btn)) return;
+        var info = claimInfo(btn);
+        var initialLabel = D.textOf(btn);
         if (!D.safeClick(btn, 'drops')) return;
-        log.info('Drop claimed: ' + (D.textOf(btn) || 'unnamed'));
-        g.ADT.countStat('dropsClaimed');
-        D.toast(g.ADT.msg('toastDropClaimed'));
+        var claimId = (info.campaignKey + '|' + info.reward)
+          .toLowerCase().replace(/[^a-z0-9|/_?=&.-]+/g, '-').slice(0, 200);
+        log.info('Drop claim dispatched: ' + (info.reward || 'unnamed'));
+        g.ADT.send({
+          type: 'adt:drop-claim-attempt',
+          claimId: claimId,
+          campaign: info.campaign,
+          reward: info.reward
+        });
+        var verifyTimer = setTimeout(function () {
+          state.pendingTimers = state.pendingTimers.filter(function (id) {
+            return id !== verifyTimer;
+          });
+          if (!state.running || state.mode !== 'claim') return;
+          var verified = claimWasAccepted(btn, initialLabel);
+          g.ADT.send({
+            type: 'adt:drop-claim-result',
+            claimId: claimId,
+            campaign: info.campaign,
+            reward: info.reward,
+            verified: verified
+          });
+          if (verified) {
+            log.info('Drop claim verified: ' + (info.reward || 'unnamed'));
+            D.toast(g.ADT.msg('toastDropClaimed'));
+          } else {
+            log.warn('Drop claim could not be verified: ' + (info.reward || 'unnamed'));
+          }
+        }, 3000);
+        state.pendingTimers.push(verifyTimer);
       }, g.ADT.jitter(700 + i * 1400, 800));
       state.pendingTimers.push(timer);
     });
@@ -713,6 +1068,34 @@
       return;
     }
 
+    if (/^\/drops\/campaigns/.test(location.pathname)) {
+      state.mode = 'campaigns';
+      g.ADT.send({ type: 'adt:drops-campaign-scan-start' });
+      setTimeout(function () {
+        if (!state.running) return;
+        var scan = scanCampaigns();
+        g.ADT.send({
+          type: 'adt:drops-campaigns-found',
+          campaigns: scan.campaigns,
+          read: scan.read
+        });
+        log.info('drops: scanned ' + scan.campaigns.length + ' campaigns from directory');
+      }, 3000);
+      state.observer = D.observe(document.body, function () {
+        if (!state.running) return;
+        var scan = scanCampaigns();
+        if (scan.read) {
+          g.ADT.send({
+            type: 'adt:drops-campaigns-found',
+            campaigns: scan.campaigns,
+            read: true
+          });
+        }
+      }, 5000);
+      log.debug('drops: campaigns directory mode');
+      return;
+    }
+
     if (!cfg.watchNotifications) {
       log.debug('drops: watcher disabled');
       return;
@@ -769,6 +1152,10 @@
     start: start,
     stop: stop,
     claimNow: claimNow,
+    collectCandidates: collectCandidates,
+    collectCategoryTarget: collectCategoryTarget,
+    collectCampaigns: collectCampaigns,
+    scanCampaigns: scanCampaigns,
     onInventoryPage: onInventoryPage
   };
   if (g.__adtLoaded) g.__adtLoaded('content/modules/drops.js');

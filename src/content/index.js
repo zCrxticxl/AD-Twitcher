@@ -53,7 +53,14 @@
     if (!s.enabled) return want;
 
     if (kind === 'channel') {
-      if (s.watchHealth.enabled) want.watchHealth = s.watchHealth;
+      // Farming still needs ownership telemetry, but disabling Watch Health is
+      // a complete opt-out from personal playback history on ordinary tabs.
+      if (s.watchHealth.enabled || s.drops.autoFarm) {
+        want.watchHealth = Object.assign({}, s.watchHealth, {
+          trackOnly: !s.watchHealth.enabled,
+          keepPlaying: s.watchHealth.enabled && s.watchHealth.keepPlaying
+        });
+      }
       if (s.channelPoints.enabled) want.channelPoints = s.channelPoints;
       if (s.adMute.enabled) want.adMute = s.adMute;
       if (s.viewerStats.enabled) want.viewerStats = s.viewerStats;
@@ -135,6 +142,31 @@
         sendResponse(M.drops
           ? { ok: true, report: M.drops.claimNow() }
           : { ok: false, reason: 'inactive' });
+        return true;
+
+      case 'adt:scan-drop-candidates':
+        sendResponse(M.drops
+          ? { ok: true, candidates: M.drops.collectCandidates() }
+          : { ok: false, reason: 'inactive' });
+        return true;
+
+      case 'adt:resolve-drop-category':
+        sendResponse(M.drops
+          ? { ok: true, target: M.drops.collectCategoryTarget(msg.name) }
+          : { ok: false, reason: 'inactive' });
+        return true;
+
+      case 'adt:scan-drop-campaigns':
+        if (!M.drops) {
+          sendResponse({ ok: false, reason: 'inactive' });
+          return true;
+        }
+        var campaignScan = M.drops.scanCampaigns();
+        sendResponse({
+          ok: true,
+          campaigns: campaignScan.campaigns,
+          read: campaignScan.read
+        });
         return true;
 
       case 'adt:get-log':

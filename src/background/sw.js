@@ -22,7 +22,8 @@
       '../lib/log.js',
       '../lib/storage.js',
       './live-watch.js',
-      './watch-health.js');
+      './watch-health.js',
+      './drops-orchestrator.js');
   }
 
   var api = g.ADT.api;
@@ -46,6 +47,29 @@
 
   /** @type {?string} */
   var lastConfigSig = null;
+
+  /** @type {!Object<string, !Promise<*>>} Heartbeat/teardown order per tab. */
+  var watchTabQueues = {};
+
+  /**
+   * A stop sent after a heartbeat must run after it, even while ownership
+   * classification is waiting on the Drops runtime queue.
+   * @param {number} tabId
+   * @param {function(): !Promise<*>} operation
+   * @return {!Promise<*>}
+   */
+  function queueWatchTab(tabId, operation) {
+    if (tabId == null) return Promise.resolve().then(operation);
+    var key = String(tabId);
+    var run = (watchTabQueues[key] || Promise.resolve()).then(operation, operation);
+    var guard = run.catch(function () {});
+    watchTabQueues[key] = guard;
+    var cleanup = function () {
+      if (watchTabQueues[key] === guard) delete watchTabQueues[key];
+    };
+    run.then(cleanup, cleanup);
+    return run;
+  }
 
   /* ------------------------------------- injection into already open tabs */
 
@@ -446,7 +470,8 @@
   function runDropsCheck(trigger) {
     var how = trigger || 'alarm';
     return g.ADT.settings.get().then(function (s) {
-      if (!s.enabled || !s.drops.enabled || !s.drops.autoClaim) {
+      var farmingProbe = how === 'farm' && s.drops.autoFarm;
+      if (!s.enabled || !s.drops.enabled || (!s.drops.autoClaim && !farmingProbe)) {
         return noteDropsCheck('off', how);
       }
       if (!s.drops.openInventoryTab) return noteDropsCheck('off', how);
@@ -499,6 +524,8 @@
       return noteDropsCheck('error', how);
     });
   }
+
+  g.ADT.dropsOrchestrator.configure({ requestInventoryCheck: runDropsCheck });
 
   /* ------------------------------------------------- browser-level tab mute */
 
@@ -701,6 +728,7 @@
     if (alarm.name === ALARM_DROPS) runDropsCheck();
     if (alarm.name === ALARM_HEALTH) {
       g.ADT.watchHealth.check();
+      g.ADT.dropsOrchestrator.tick(false);
       sweepTabMutes();
     }
     if (alarm.name.indexOf(ALARM_CLOSE_TAB_PREFIX) === 0) {
@@ -745,18 +773,43 @@
         return true;
 
       case 'adt:watch-heartbeat':
+        var heartbeatTabId = sender && sender.tab && sender.tab.id;
         answerWith(
-          g.ADT.watchHealth.handleHeartbeat(
-            msg, sender && sender.tab && sender.tab.id)
-            .then(function () { return { ok: true }; }),
+          queueWatchTab(heartbeatTabId, function () {
+            return g.ADT.dropsOrchestrator.handleHeartbeat(msg, heartbeatTabId)
+              .catch(function (e) {
+                // Unknown ownership must fail closed: losing one personal sample
+                // is safer than permanently attributing unattended farming.
+                log.warn('farm heartbeat ownership: ' + (e && e.message));
+                return true;
+              })
+              .then(function (ownedFarmTab) {
+                if (!ownedFarmTab) {
+                  return g.ADT.watchHealth.handleHeartbeat(
+                    msg, heartbeatTabId, true);
+                }
+                return g.ADT.settings.get().then(function (s) {
+                  var include = !!(s && s.drops && s.drops.includeInStats);
+                  return g.ADT.watchHealth.handleHeartbeat(
+                    msg, heartbeatTabId, include);
+                }).catch(function () {
+                  return g.ADT.watchHealth.handleHeartbeat(
+                    msg, heartbeatTabId, false);
+                });
+              });
+          }).then(function () { return { ok: true }; }),
           sendResponse, 'watch-heartbeat');
         return true;
 
       case 'adt:watch-stopped':
-        if (sender && sender.tab && sender.tab.id != null) {
-          g.ADT.watchHealth.forgetTab(sender.tab.id);
+        var stoppedTabId = sender && sender.tab && sender.tab.id;
+        if (stoppedTabId == null) {
+          sendResponse({ ok: true });
+          return true;
         }
-        sendResponse({ ok: true });
+        answerWith(queueWatchTab(stoppedTabId, function () {
+          return g.ADT.watchHealth.forgetTab(stoppedTabId);
+        }).then(function () { return { ok: true }; }), sendResponse, 'watch-stopped');
         return true;
 
       // Ad mute at browser level. The sender decides when, this side only ever
@@ -793,22 +846,82 @@
       case 'adt:status':
         answerWith(
           Promise.all([
-            g.ADT.settings.get(), g.ADT.liveWatch.status(), activityStatus()
+            g.ADT.settings.get(), g.ADT.liveWatch.status(), activityStatus(),
+            g.ADT.dropsOrchestrator.status()
           ]).then(function (r) {
-            return { ok: true, settings: r[0], live: r[1], activity: r[2] };
+            return {
+              ok: true, settings: r[0], live: r[1], activity: r[2], farm: r[3]
+            };
           }),
           sendResponse, 'status');
         return true;  // Async response.
+
+      case 'adt:channel-stats':
+        answerWith(g.ADT.watchHealth.channelStats(msg.range).then(function (stats) {
+          return { ok: true, stats: stats };
+        }), sendResponse, 'channel-stats');
+        return true;
+
+      case 'adt:reset-channel-stats':
+        answerWith(g.ADT.watchHealth.resetChannelStats().then(function () {
+          return { ok: true };
+        }), sendResponse, 'reset-channel-stats');
+        return true;
 
       case 'adt:drops-check-now':
         answerWith(runDropsCheck('popup').then(function () { return { ok: true }; }),
           sendResponse, 'drops-check-now');
         return true;
 
+      case 'adt:open-drops-inventory':
+        answerWith(g.ADT.dropsOrchestrator.setCatalogScanning(true).then(function () {
+          return Promise.resolve(api.tabs.query({ url: '*://*.twitch.tv/drops/campaigns*' }));
+        }).then(function (tabs) {
+          if (tabs && tabs.length && tabs[0].id != null) {
+            return Promise.resolve(api.tabs.update(tabs[0].id, { active: true })).then(function () {
+              return g.ADT.sendToTab(tabs[0].id, { type: 'adt:scan-drop-campaigns' });
+            }).then(function (res) {
+              if (res && res.ok) {
+                return g.ADT.dropsOrchestrator.handleCatalog(res.campaigns, res.read);
+              }
+            }).then(function () { return { ok: true }; });
+          }
+          return Promise.resolve(api.tabs.create({
+            url: 'https://www.twitch.tv/drops/campaigns', active: true
+          })).then(function () { return { ok: true }; });
+        }).catch(function (error) {
+          return g.ADT.dropsOrchestrator.setCatalogScanning(false,
+            (error && error.message) || 'Campaign scan failed').then(function () { throw error; });
+        }), sendResponse, 'open-drops-campaigns');
+        return true;
+
       // Scraped off the inventory page by the content script.
       case 'adt:drops-progress':
-        answerWith(storeProgress(msg.items, msg.read)
+        var snapshot = Array.isArray(msg.campaigns)
+          ? g.ADT.dropsOrchestrator.handleSnapshot(msg.campaigns, msg.read)
+          : Promise.resolve();
+        answerWith(Promise.all([storeProgress(msg.items, msg.read), snapshot])
           .then(function () { return { ok: true }; }), sendResponse, 'drops-progress');
+        return true;
+
+      case 'adt:drop-claim-attempt':
+        answerWith(g.ADT.dropsOrchestrator.handleClaimAttempt(msg)
+          .then(function () { return { ok: true }; }), sendResponse, 'drop-claim-attempt');
+        return true;
+
+      case 'adt:drop-claim-result':
+        answerWith(g.ADT.dropsOrchestrator.handleClaimResult(msg)
+          .then(function () { return { ok: true }; }), sendResponse, 'drop-claim-result');
+        return true;
+
+      case 'adt:farm-priority':
+        answerWith(g.ADT.dropsOrchestrator.movePriority(msg.key, msg.direction)
+          .then(function () { return { ok: true }; }), sendResponse, 'farm-priority');
+        return true;
+
+      case 'adt:farm-set-priority':
+        answerWith(g.ADT.dropsOrchestrator.setPriority(msg.keys)
+          .then(function () { return { ok: true }; }), sendResponse, 'farm-set-priority');
         return true;
 
       // Raised by the content script when Twitch shows the unlock notification.
@@ -819,8 +932,20 @@
         sendResponse({ ok: true });
         return true;
 
+      case 'adt:drops-campaigns-found':
+        answerWith(g.ADT.dropsOrchestrator.handleCatalog(msg.campaigns, msg.read)
+          .then(function () { return { ok: true }; }), sendResponse, 'drops-campaigns-found');
+        return true;
+
+      case 'adt:drops-campaign-scan-start':
+        answerWith(g.ADT.dropsOrchestrator.setCatalogScanning(true)
+          .then(function () { return { ok: true }; }), sendResponse, 'drops-campaign-scan-start');
+        return true;
+
       case 'adt:settings-changed':
-        answerWith(syncAlarms(true).then(function () { return { ok: true }; }),
+        answerWith(Promise.all([
+          syncAlarms(true), g.ADT.dropsOrchestrator.tick(true)
+        ]).then(function () { return { ok: true }; }),
           sendResponse, 'settings-changed');
         return true;
 
@@ -847,7 +972,12 @@
 
   api.tabs.onRemoved.addListener(function (tabId) {
     g.ADT.liveWatch.forgetTab(tabId);
-    g.ADT.watchHealth.forgetTab(tabId);
+    queueWatchTab(tabId, function () {
+      return Promise.all([
+        g.ADT.watchHealth.forgetTab(tabId),
+        g.ADT.dropsOrchestrator.forgetTab(tabId)
+      ]);
+    }).catch(function () {});
     forgetTabMute(tabId);
     delete lastInventoryReload[tabId];
   });
@@ -869,7 +999,9 @@
 
   if (api.runtime.onStartup) {
     api.runtime.onStartup.addListener(function () {
-      syncAlarms(true).then(injectIntoOpenTabs);
+      Promise.resolve(g.ADT.dropsOrchestrator.resume())
+        .then(function () { return syncAlarms(true); })
+        .then(injectIntoOpenTabs);
     });
   }
 
@@ -878,6 +1010,6 @@
   syncAlarms(true).then(function () {
     log.info('AD-Twitcher background ready');
     // Also runs on a plain worker restart, where onInstalled does not fire.
-    return injectIntoOpenTabs();
+    return Promise.all([injectIntoOpenTabs(), g.ADT.dropsOrchestrator.resume()]);
   });
 })();

@@ -28,6 +28,7 @@
       "lib/storage.js",
       "background/live-watch.js",
       "background/watch-health.js",
+      "background/drops-orchestrator.js",
       "background/sw.js"
     ]
   },

@@ -235,6 +235,9 @@ console.log('\n[7] Click guard');
   /'main'/.test(drops)
     ? fail("drops.js: 'main' as a root matches every page, the text scan hits rewards")
     : ok('drops.js has no page-wide root');
+  /querySelector\("main"\)[\s\S]*D\.qaAny\(DIRECTORY_CHANNEL_SELECTORS, root\)/.test(drops)
+    ? ok('drops candidate discovery excludes sidebar channels')
+    : fail('drops.js: directory candidates are not scoped to main content');
   /onInventoryPage\(\)/.test(drops) && /mode !== 'claim'/.test(drops)
     ? ok('drops.js clicks in claim mode only')
     : fail('drops.js: click path is not confined to the inventory page');
@@ -505,17 +508,25 @@ console.log('\n[14] Stream watchdog');
     ? ok('automatic resumes are capped per minute')
     : fail('the resume path has no ceiling');
 
+  /addEventListener\('seeking'/.test(content) &&
+      /addEventListener\('seeked'/.test(content) && /playerEpoch\+\+/.test(content)
+    ? ok('media seeks reset the watchtime anchor')
+    : fail('seeking can be mistaken for verified playback');
+
   /removeEventListener\('pointerdown'/.test(content) &&
       /removeEventListener\('keydown'/.test(content)
     ? ok('pause guard input listeners are removed on stop')
     : fail('watch-health leaks its user-input listeners');
 }
 
-console.log('\n[15] Lifetime statistics');
+console.log('\n[15] Lifetime and channel statistics');
 {
   const storage = await readFile(join(SRC, 'lib/storage.js'), 'utf8');
   const popupHtml = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
   const popupJs = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+  const content = await readFile(join(SRC, 'content/modules/watch-health.js'), 'utf8');
+  const watch = await readFile(join(SRC, 'background/watch-health.js'), 'utf8');
+  const sw = await readFile(join(SRC, 'background/sw.js'), 'utf8');
   /trackingSince:\s*0/.test(storage) && /lastActivityAt:\s*0/.test(storage) &&
       /if \(!next\.trackingSince\) next\.trackingSince = now/.test(storage)
     ? ok('statistics persist their first and latest activity timestamps')
@@ -524,6 +535,29 @@ console.log('\n[15] Lifetime statistics');
       /statsRecordedSince/.test(popupJs) && /Intl\.DateTimeFormat/.test(popupJs)
     ? ok('popup presents lifetime totals with a localized tracking date')
     : fail('popup does not clearly present lifetime statistics');
+
+  /mediaTimeMs/.test(content) && /sourceId/.test(content) && /playerEpoch/.test(content)
+    ? ok('channel watchtime is anchored to a specific advancing media source')
+    : fail('content heartbeats cannot prove real channel playback');
+  /function recordPlayback/.test(watch) && /function uncoveredIntervals/.test(watch) &&
+      /function channelStats/.test(watch) && /function resetChannelStats/.test(watch)
+    ? ok('channel history persists, deduplicates and aggregates locally')
+    : fail('background channel-history aggregation is incomplete');
+  /adt:channel-stats/.test(sw) && /adt:reset-channel-stats/.test(sw)
+    ? ok('channel statistics expose read and explicit reset routes')
+    : fail('service worker does not route channel statistics safely');
+  /ownedFarmTab/.test(sw) && /handleHeartbeat\(\s*msg, heartbeatTabId/.test(sw)
+    && /includeInStats/.test(sw)
+    ? ok('extension-owned farming tabs stay out of personal channel history')
+    : fail('automatic farming pollutes personal channel statistics');
+  /function queueWatchTab/.test(sw) &&
+      /queueWatchTab\(stoppedTabId/.test(sw) && /queueWatchTab\(tabId/.test(sw)
+    ? ok('heartbeats and tab teardown stay ordered per tab')
+    : fail('a delayed heartbeat can resurrect a stopped tab');
+  /data-pane="channelStats"/.test(popupHtml) && /data-stats-range="today"/.test(popupHtml) &&
+      /function refreshChannelStats/.test(popupJs) && /function renderChannelStats/.test(popupJs)
+    ? ok('popup presents calendar ranges and per-channel ranking')
+    : fail('popup channel-history presentation is incomplete');
 }
 
 console.log('\n[16] Creator links');
@@ -889,6 +923,7 @@ console.log('\n[22] Popup polling and active editing');
    * against, just missed for this one control.
    */
   const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+  const html = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
 
   /var masterTogglePending = false;/.test(js)
     ? ok('a pending flag tracks the in-flight master-toggle write')
@@ -909,6 +944,15 @@ console.log('\n[22] Popup polling and active editing');
   /window\.addEventListener\('unload', function \(\) \{ clearInterval\(pollTimer\); \}\)/.test(js)
     ? ok('the poll timer is cleared when the popup unloads')
     : fail('popup.js can leave its poll timer running after unload');
+
+  /document\.querySelector\('\.pane\[data-pane="settings"\]'\)/.test(js)
+    ? ok('automatic-farming settings hint targets the actual pane')
+    : fail('automatic-farming hint uses an id lookup with a CSS selector');
+
+  /ArrowRight/.test(js) && /ArrowLeft/.test(js) &&
+      /aria-controls="pane-/.test(html) && /role="tabpanel"/.test(html)
+    ? ok('popup tabs expose keyboard and ARIA relationships')
+    : fail('popup tab semantics are incomplete');
 }
 
 console.log('\n[23] Settings writes cannot fail silently');
@@ -944,6 +988,31 @@ console.log('\n[23] Settings writes cannot fail silently');
   /viewerStats: \{ panel: false \} \}\)\.catch\(function \(e\) \{/.test(viewerStats)
     ? ok('the viewer-stats panel-close write is not fire-and-forget')
     : fail('viewer-stats.js can drop a failed settings write silently');
+}
+
+console.log('\n[24] Settings groups stay scannable');
+{
+  /*
+   * The Drops card grew to fourteen options that mixed core claiming, timing
+   * and farming. Splitting it into a "General" and an "Auto Farm" group with
+   * light uppercase labels keeps the two concerns visually distinct, and the
+   * farming controls collapse entirely when auto-farming is off so that
+   * non-farmers never see settings that do not apply to them.
+   */
+  const html = await readFile(join(SRC, 'popup/popup.html'), 'utf8');
+  const css = await readFile(join(SRC, 'popup/popup.css'), 'utf8');
+  const js = await readFile(join(SRC, 'popup/popup.js'), 'utf8');
+
+  const dropsCard = html.match(/data-i18n="cardDrops"[\s\S]*?data-i18n="hintDrops"/);
+  const general = /data-i18n="settingsGroupDropsGeneral"/.test(dropsCard ? dropsCard[0] : '');
+  const autoFarm = /data-i18n="settingsGroupDropsAutoFarm"/.test(dropsCard ? dropsCard[0] : '');
+  const farmGroupHidden = (html.match(/hint--farm/g) || []).length >= 5;
+  const cssHidesFarm = /\.pane\[data-pane="settings"\]\.autoFarm-on \.hint--farm \{ display: block; \}/.test(css);
+  const jsTogglesFarm = /classList\.toggle\('autoFarm-on', !!s\.drops\.autoFarm\)/.test(js);
+
+  general && autoFarm && farmGroupHidden && cssHidesFarm && jsTogglesFarm
+    ? ok('drops settings split into general and auto-farm groups; farming collapses when off')
+    : fail('drops settings are not grouped or the auto-farm collapse is incomplete');
 }
 
 console.log(errors ? `\n${errors} problem(s).\n` : '\nAll clean.\n');
