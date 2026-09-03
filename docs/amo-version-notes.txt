@@ -1,13 +1,16 @@
-AD-Twitcher 1.0.8
+AD-Twitcher 1.0.9
 
 What's new:
-- Drops inventory rework: every running drop shows a progress bar in the popup; finished drops are shown as markers, and the list reaches the actual running campaign.
-- The popup now re-syncs its controls when a settings write fails (e.g. background restart) - no more toggle that flips back.
-- The popup's "check now" button also refreshes the drop figures.
+- Settings tab redesigned: grouped cards, numeric default values shown, per-card Reset buttons, a separate Danger zone for the global reset, and a confirmation toast on save.
+- Personal channel statistics: opt-in local watch-time tracking per channel under Watch Health, with weekly/monthly totals and a per-channel ranking.
+- A Drops includeInStats option lets farmed channels count toward your own channel statistics.
+- Farming robustness: farming tab ownership survives a browser restart, the extension never takes over tabs you opened yourself, campaigns farm even with automatic claiming off, and expired campaigns leave the queue automatically.
+- The drop list is now authoritative: a small or empty (successfully read) drop list removes stale campaigns instead of keeping them.
 
 Fixes:
-- After an ad ends, playback recovery now recognizes a pause made on purpose and leaves the player alone (no auto-resume, no tab reload). A genuinely stalled player is still recovered with one guarded reload.
-- Auto-join only closes tabs the extension opened itself - tabs you opened yourself are never closed when the stream ends.
-- Two channels unlocking a drop at the same time open only one inventory tab.
+- After a browser restart the extension recovers its own farming tab instead of opening a duplicate and orphaning the old one.
+- A settings change made while Drops discovery was in flight is now applied immediately afterwards instead of being dropped.
+- An empty inventory no longer resurrects a campaign you removed or that genuinely ended.
+- Disabling Watch Health now also stops personal channel history recording.
 
 No new permissions, no data collection - all data stays on your device.
