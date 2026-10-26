@@ -1,16 +1,14 @@
-AD-Twitcher 1.0.9
+AD-Twitcher 1.0.10
 
 What's new:
-- Settings tab redesigned: grouped cards, numeric default values shown, per-card Reset buttons, a separate Danger zone for the global reset, and a confirmation toast on save.
-- Personal channel statistics: opt-in local watch-time tracking per channel under Watch Health, with weekly/monthly totals and a per-channel ranking.
-- A Drops includeInStats option lets farmed channels count toward your own channel statistics.
-- Farming robustness: farming tab ownership survives a browser restart, the extension never takes over tabs you opened yourself, campaigns farm even with automatic claiming off, and expired campaigns leave the queue automatically.
-- The drop list is now authoritative: a small or empty (successfully read) drop list removes stale campaigns instead of keeping them.
+- A farming tab you close yourself is no longer reopened straight away. Farming pauses; "Apply queue" or switching auto-farming off and on resumes it. If the whole window closes, farming carries on in a new tab.
+- With "Then open the inventory in a background tab" switched off, an inventory tab you already have open is still used to claim finished drops.
 
 Fixes:
-- After a browser restart the extension recovers its own farming tab instead of opening a duplicate and orphaning the old one.
-- A settings change made while Drops discovery was in flight is now applied immediately afterwards instead of being dropped.
-- An empty inventory no longer resurrects a campaign you removed or that genuinely ended.
-- Disabling Watch Health now also stops personal channel history recording.
+- The background inventory tab is only closed while it still shows the drops inventory, never after you navigated it elsewhere.
+- Firefox before 126: the farming tab is muted again (the combined mute/keep-alive update was rejected).
+- No false "drop unlocked" detection from the extension's own message in Russian and Japanese.
+- Settings number fields stay within their allowed range; a failed full reset is reported.
+- Content scripts are no longer injected twice on install or browser start.
 
 No new permissions, no data collection - all data stays on your device.

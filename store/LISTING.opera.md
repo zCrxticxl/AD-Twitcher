@@ -34,15 +34,15 @@ Not affiliated with Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.10
+- Closing the farming tab yourself now pauses farming instead of reopening it; "Apply queue" resumes.
+- An inventory tab you already have open is used for claiming even when opening a new one is switched off.
+- Fixes: the background inventory tab is only closed while it still shows the inventory, the farming tab stays muted in older Firefox, and no more false drop alerts in Russian and Japanese.
+
 1.0.9
 - Redesigned settings tab: grouped cards, the default value next to every field and a reset button per card.
 - New: optional local watch-time statistics per channel, part of Watch Health.
 - Drop farming finds its own tab again after a browser restart and never takes over a tab you opened.
-
-1.0.8
-- Every running drop is shown as a progress bar; finished drops appear as markers.
-- After an ad, a pause you made yourself is respected - no automatic reload.
-- Auto-join only closes tabs it opened itself, and a drop unlock opens only one inventory tab.
 ```
 
 ---
@@ -74,15 +74,15 @@ Nicht mit Twitch Interactive, Inc. verbunden.
 **Changelog**
 
 ```
+1.0.10
+- Schließt du das Farming-Tab selbst, pausiert das Farming jetzt, statt das Tab neu zu öffnen; „Queue anwenden“ setzt es fort.
+- Ein bereits offenes Inventar-Tab wird zum Abholen genutzt, auch wenn das Öffnen eines neuen Tabs ausgeschaltet ist.
+- Fehlerbehebungen: Das Inventar-Tab im Hintergrund wird nur geschlossen, solange es noch das Inventar zeigt, das Farming-Tab bleibt auch in älteren Firefox-Versionen stumm, und keine falschen Drop-Meldungen mehr auf Russisch und Japanisch.
+
 1.0.9
 - Neu gestalteter Einstellungs-Tab: gruppierte Karten, der Standardwert neben jedem Feld und ein Zurücksetzen-Button pro Karte.
 - Neu: optionale lokale Watchtime-Statistik pro Kanal, Teil der Wiedergabe-Überwachung.
 - Das Drop-Farming findet sein eigenes Tab nach einem Browser-Neustart wieder und übernimmt nie ein Tab, das du selbst geöffnet hast.
-
-1.0.8
-- Jeder laufende Drop wird als Fortschrittsbalken angezeigt, fertige Drops als Markierung.
-- Nach einer Werbung bleibt eine selbst gesetzte Pause bestehen - kein automatisches Neuladen.
-- Auto-Join schließt nur Tabs, die es selbst geöffnet hat, und ein Drop-Unlock öffnet nur ein Inventar-Tab.
 ```
 
 ---
@@ -114,15 +114,15 @@ Sin afiliación con Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.10
+- Si cierras tú la pestaña de farmeo, ahora el farmeo se pausa en lugar de volver a abrirla; «Aplicar cola» lo reanuda.
+- Una pestaña de inventario que ya tengas abierta se usa para reclamar aunque esté desactivado abrir una nueva.
+- Correcciones: la pestaña de inventario en segundo plano solo se cierra mientras sigue mostrando el inventario, la pestaña de farmeo sigue silenciada en versiones antiguas de Firefox y ya no hay avisos falsos de drops en ruso y japonés.
+
 1.0.9
 - Pestaña de ajustes rediseñada: tarjetas agrupadas, el valor predeterminado junto a cada campo y un botón de restablecer por tarjeta.
 - Nuevo: estadísticas locales opcionales de tiempo de visualización por canal, dentro de Salud de reproducción.
 - El farmeo de drops vuelve a encontrar su propia pestaña tras reiniciar el navegador y nunca toma una pestaña que abriste tú.
-
-1.0.8
-- Cada drop en curso se muestra como barra de progreso; los terminados aparecen como marcas.
-- Tras un anuncio se respeta la pausa que hiciste tú: sin recarga automática.
-- La unión automática solo cierra las pestañas que abrió ella misma, y un drop desbloqueado abre una sola pestaña de inventario.
 ```
 
 ---
@@ -154,15 +154,15 @@ Sans affiliation avec Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.10
+- Si vous fermez vous-même l’onglet de farming, le farming se met désormais en pause au lieu de le rouvrir ; « Appliquer la file » le relance.
+- Un onglet d’inventaire déjà ouvert est utilisé pour récupérer les drops, même si l’ouverture d’un nouvel onglet est désactivée.
+- Corrections : l’onglet d’inventaire en arrière-plan n’est fermé que s’il affiche encore l’inventaire, l’onglet de farming reste muet dans les anciennes versions de Firefox et plus de fausses alertes de drop en russe et en japonais.
+
 1.0.9
 - Onglet des paramètres repensé : cartes regroupées, valeur par défaut à côté de chaque champ et un bouton de réinitialisation par carte.
 - Nouveau : statistiques locales facultatives de temps de visionnage par chaîne, intégrées à la surveillance de lecture.
 - Le farming de drops retrouve son propre onglet après un redémarrage du navigateur et ne prend jamais un onglet que vous avez ouvert.
-
-1.0.8
-- Chaque drop en cours s’affiche sous forme de barre de progression ; les drops terminés apparaissent comme repères.
-- Après une publicité, une pause que vous avez faite est respectée : plus de rechargement automatique.
-- La connexion automatique ne ferme que les onglets qu’elle a ouverts, et un drop débloqué n’ouvre qu’un seul onglet d’inventaire.
 ```
 
 ---
@@ -194,15 +194,15 @@ Non affiliato a Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.10
+- Se chiudi tu la scheda di farming, ora il farming va in pausa invece di riaprirla; «Applica coda» lo riprende.
+- Una scheda dell’inventario già aperta viene usata per riscattare anche se l’apertura di una nuova è disattivata.
+- Correzioni: la scheda dell’inventario in background viene chiusa solo finché mostra ancora l’inventario, la scheda di farming resta muta nelle versioni meno recenti di Firefox e niente più falsi avvisi di drop in russo e giapponese.
+
 1.0.9
 - Scheda impostazioni riprogettata: schede raggruppate, il valore predefinito accanto a ogni campo e un pulsante di ripristino per scheda.
 - Novità: statistiche locali facoltative sul tempo di visione per canale, parte del controllo di riproduzione.
 - Il farming dei drop ritrova la propria scheda dopo il riavvio del browser e non prende mai una scheda aperta da te.
-
-1.0.8
-- Ogni drop in corso è mostrato come barra di avanzamento; quelli completati appaiono come indicatori.
-- Dopo una pubblicità, una pausa messa da te viene rispettata: niente ricaricamento automatico.
-- L’accesso automatico chiude solo le schede che ha aperto, e uno sblocco di drop apre una sola scheda dell’inventario.
 ```
 
 ---
@@ -234,15 +234,15 @@ Sem vínculo com a Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.10
+- Se você fechar a aba de farm, agora o farm é pausado em vez de reabrir a aba; “Aplicar fila” retoma.
+- Uma aba de inventário que você já tenha aberta é usada para resgatar, mesmo com a abertura de uma nova desativada.
+- Correções: a aba de inventário em segundo plano só é fechada enquanto ainda mostra o inventário, a aba de farm continua sem som em versões antigas do Firefox e não há mais alertas falsos de drop em russo e japonês.
+
 1.0.9
 - Aba de configurações redesenhada: cartões agrupados, o valor padrão ao lado de cada campo e um botão de redefinir por cartão.
 - Novo: estatísticas locais opcionais de tempo assistido por canal, parte da Saúde da reprodução.
 - O farm de drops encontra sua própria aba de novo após reiniciar o navegador e nunca assume uma aba aberta por você.
-
-1.0.8
-- Cada drop em andamento aparece como barra de progresso; os concluídos aparecem como marcadores.
-- Depois de um anúncio, uma pausa feita por você é respeitada: sem recarregamento automático.
-- A entrada automática só fecha abas que ela mesma abriu, e um drop desbloqueado abre apenas uma aba de inventário.
 ```
 
 ---
@@ -274,15 +274,15 @@ Niepowiązane z Twitch Interactive, Inc.
 **Changelog**
 
 ```
+1.0.10
+- Gdy sam zamkniesz kartę farmienia, farmienie jest teraz wstrzymywane zamiast ponownego otwierania karty; „Zastosuj kolejkę” je wznawia.
+- Już otwarta karta ekwipunku jest używana do odbierania, nawet gdy otwieranie nowej jest wyłączone.
+- Poprawki: karta ekwipunku w tle jest zamykana tylko wtedy, gdy nadal pokazuje ekwipunek, karta farmienia pozostaje wyciszona w starszych wersjach Firefoksa, a fałszywe powiadomienia o dropach po rosyjsku i japońsku zniknęły.
+
 1.0.9
 - Przeprojektowana karta ustawień: zgrupowane sekcje, wartość domyślna obok każdego pola i przycisk resetu w każdej sekcji.
 - Nowość: opcjonalne lokalne statystyki czasu oglądania dla każdego kanału, w ramach kontroli odtwarzania.
 - Farmienie dropów odnajduje swoją kartę po ponownym uruchomieniu przeglądarki i nigdy nie przejmuje karty otwartej przez Ciebie.
-
-1.0.8
-- Każdy trwający drop jest pokazany jako pasek postępu, ukończone jako znaczniki.
-- Po reklamie pauza ustawiona przez Ciebie jest respektowana - bez automatycznego przeładowania.
-- Automatyczne dołączanie zamyka tylko karty, które samo otworzyło, a odblokowany drop otwiera tylko jedną kartę ekwipunku.
 ```
 
 ---
@@ -314,15 +314,15 @@ AD-Twitcher не блокировщик рекламы: реклама Twitch п
 **Changelog**
 
 ```
+1.0.10
+- Если вы сами закрываете вкладку фарма, фарм теперь приостанавливается, а не открывает её заново; «Применить очередь» возобновляет его.
+- Уже открытая вкладка инвентаря используется для получения наград, даже если открытие новой вкладки отключено.
+- Исправления: фоновая вкладка инвентаря закрывается, только пока она показывает инвентарь, вкладка фарма остаётся без звука в старых версиях Firefox, и больше нет ложных уведомлений о дропах на русском и японском.
+
 1.0.9
 - Переработанная вкладка настроек: сгруппированные карточки, значение по умолчанию рядом с каждым полем и кнопка сброса для каждой карточки.
 - Новое: необязательная локальная статистика времени просмотра по каналам в составе контроля воспроизведения.
 - Фарм дропов снова находит свою вкладку после перезапуска браузера и никогда не забирает вкладку, открытую вами.
-
-1.0.8
-- Каждый текущий дроп показан полосой прогресса, завершённые - отметками.
-- После рекламы пауза, поставленная вами, сохраняется - без автоматической перезагрузки.
-- Автоподключение закрывает только вкладки, которые открыло само, а разблокировка дропа открывает только одну вкладку инвентаря.
 ```
 
 ---
@@ -354,15 +354,15 @@ Twitch Interactive, Inc. ile bağlantılı değildir.
 **Changelog**
 
 ```
+1.0.10
+- Farm sekmesini kendin kapattığında farm artık sekmeyi yeniden açmak yerine duraklatılıyor; "Kuyruğu uygula" devam ettirir.
+- Zaten açık olan bir envanter sekmesi, yeni sekme açma kapalı olsa bile ödül almak için kullanılır.
+- Düzeltmeler: arka plandaki envanter sekmesi yalnızca hâlâ envanteri gösteriyorsa kapatılır, farm sekmesi eski Firefox sürümlerinde de sessiz kalır ve Rusça ile Japoncada artık yanlış drop uyarısı yok.
+
 1.0.9
 - Yeniden tasarlanan ayarlar sekmesi: gruplanmış kartlar, her alanın yanında varsayılan değer ve her kart için sıfırlama düğmesi.
 - Yeni: Oynatma Sağlığı kapsamında kanal başına isteğe bağlı yerel izleme süresi istatistikleri.
 - Drop farmı, tarayıcı yeniden başlatıldıktan sonra kendi sekmesini yeniden bulur ve senin açtığın bir sekmeyi asla devralmaz.
-
-1.0.8
-- Devam eden her drop bir ilerleme çubuğu olarak, tamamlananlar işaret olarak gösterilir.
-- Reklamdan sonra kendi verdiğin duraklatmaya dokunulmaz - otomatik yenileme yok.
-- Otomatik katılım yalnızca kendi açtığı sekmeleri kapatır ve bir drop açılması yalnızca tek bir envanter sekmesi açar.
 ```
 
 ---
@@ -394,15 +394,15 @@ Twitch Interactive, Inc. とは関係ありません。
 **Changelog**
 
 ```
+1.0.10
+- ファーミングタブを自分で閉じると、タブを開き直す代わりにファーミングが一時停止するようになりました。「キューを適用」で再開します。
+- 新しいタブを開く設定がオフでも、すでに開いているインベントリタブで受け取りを行います。
+- 修正：バックグラウンドのインベントリタブはインベントリを表示している間だけ閉じるようになり、古い Firefox でもファーミングタブがミュートされ、ロシア語と日本語での誤ったドロップ通知がなくなりました。
+
 1.0.9
 - 設定タブを刷新：カードをグループ化し、各項目の横に既定値を表示、カードごとにリセットボタンを追加。
 - 新機能：再生ヘルスの一部として、チャンネルごとの視聴時間をローカルに記録する統計（任意）。
 - ドロップのファーミングはブラウザーの再起動後も自分のタブを見つけ直し、あなたが開いたタブを乗っ取ることはありません。
-
-1.0.8
-- 進行中のドロップはすべて進捗バーで表示され、完了したドロップはマーカーで示されます。
-- 広告の後、あなたが自分で一時停止した場合はそのまま維持され、自動で再読み込みされません。
-- 自動参加は自分で開いたタブだけを閉じ、ドロップの解除で開くインベントリタブは 1 つだけです。
 ```
 
 ---
@@ -434,15 +434,15 @@ Twitch Interactive, Inc.와 제휴 관계가 없습니다.
 **Changelog**
 
 ```
+1.0.10
+- 파밍 탭을 직접 닫으면 이제 탭을 다시 여는 대신 파밍이 일시정지됩니다. "대기열 적용"으로 재개합니다.
+- 새 탭 열기가 꺼져 있어도 이미 열려 있는 인벤토리 탭에서 보상을 받습니다.
+- 수정: 백그라운드 인벤토리 탭은 인벤토리를 표시하는 동안에만 닫히고, 이전 Firefox에서도 파밍 탭이 음소거되며, 러시아어와 일본어에서 잘못된 드롭 알림이 더 이상 나타나지 않습니다.
+
 1.0.9
 - 설정 탭 새 디자인: 카드별로 묶고, 각 항목 옆에 기본값을 표시하며, 카드마다 초기화 버튼을 추가했습니다.
 - 새 기능: 재생 상태 관리의 일부로, 채널별 시청 시간을 로컬에 기록하는 선택형 통계.
 - 드롭 파밍은 브라우저를 다시 시작한 뒤에도 자기 탭을 다시 찾으며, 직접 연 탭을 가져가지 않습니다.
-
-1.0.8
-- 진행 중인 모든 드롭이 진행률 막대로 표시되고, 완료된 드롭은 표시로 나타납니다.
-- 광고가 끝난 뒤 직접 일시정지한 경우 그대로 유지되며 자동으로 새로고침하지 않습니다.
-- 자동 참여는 직접 연 탭만 닫고, 드롭 잠금 해제 시 인벤토리 탭은 하나만 엽니다.
 ```
 
 ---
@@ -474,13 +474,13 @@ AD-Twitcher 不是广告拦截器：标签页静音期间 Twitch 广告仍在播
 **Changelog**
 
 ```
+1.0.10
+- 你自己关闭挂机标签页后，现在会暂停挂机，而不是重新打开它；点击“应用队列”即可继续。
+- 即使关闭了打开新标签页的选项，也会使用你已打开的库存标签页领取奖励。
+- 修复：后台库存标签页只在仍显示库存时才会关闭，旧版 Firefox 中挂机标签页也保持静音，俄语和日语中不再出现错误的掉宝提示。
+
 1.0.9
 - 重新设计的设置标签页：卡片分组，每个字段旁显示默认值，每张卡片都有重置按钮。
 - 新增：可选的本地按频道观看时长统计，属于播放健康功能的一部分。
 - 掉宝挂机在浏览器重启后会重新找到自己的标签页，绝不会接管你自己打开的标签页。
-
-1.0.8
-- 每个进行中的掉宝都以进度条显示，已完成的以标记显示。
-- 广告结束后，你自己暂停的播放会保持暂停，不再自动刷新。
-- 自动加入只关闭它自己打开的标签页，一次掉宝解锁只会打开一个库存标签页。
 ```

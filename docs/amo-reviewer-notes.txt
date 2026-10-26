@@ -1,10 +1,11 @@
-Notes for the reviewer - AD-Twitcher 1.0.8
+Notes for the reviewer - AD-Twitcher 1.0.10
 
 Permissions:
-- storage: settings, activity state, counters and drop progress - all local
-- tabs: check for already-open channel/inventory tabs
+- storage: settings, activity state, counters, drop progress and channel
+  statistics - all local
+- tabs: check for already-open channel/inventory tabs, manage the farming tab
 - alarms: periodic checks
-- notifications: "stream may be stalled" watchdog
+- notifications: "stream may be stalled" watchdog and farming notifications
 - *://*.twitch.tv/*: all functionality runs on Twitch pages only
 - Firefox uses a persistent background page.
 
@@ -13,16 +14,17 @@ Data handling:
 - Stored settings and activity stay in browser.storage.local; short diagnostic
   logs stay in memory. Nothing is transmitted by the extension.
 
-How to verify the 1.0.8 changes:
-1. Drops inventory (twitch.tv/drops/inventory): every running drop shows a
-   progress bar; finished drops are marked, not ranked.
-2. Popup: toggling a switch must stick without flickering back.
-3. Ad recovery: after an ad ends, pausing manually within about 3.5 seconds
-   must not reload the tab and must keep the player paused; a stalled (never
-   paused) player is still recovered by one reload.
-4. Auto-join: a tab the user opened themselves is never closed when the
-   stream ends.
-5. Drops: simultaneous unlocks open exactly one inventory tab.
+How to verify the 1.0.10 changes:
+1. Farming pause: enable auto-farming, let it open its tab, then close that
+   tab by hand. No new tab opens and the popup shows the paused state;
+   "Apply queue" resumes farming.
+2. Open inventory: switch off "Then open the inventory in a background tab",
+   open twitch.tv/drops/inventory yourself and press the drops check in the
+   popup. Claims run in that tab and no extra tab opens.
+3. Inventory tab closer: when the extension opens the inventory in a
+   background tab, navigate that tab to a channel before it closes. It stays
+   open.
+4. Farming tab audio: the farming tab is muted (relevant for Firefox < 126).
 
 Source:
 - Unminified, in the src/ folder; node build.mjs --zip reproduces the

@@ -1,8 +1,10 @@
 # AD-Twitcher - status and handover
 
-Version 1.0.9. Source audited in full again on 26 October 2026; the previous
-full audit was 1.0.7 on 17 August 2026. The 1.0.8 and 1.0.9 changes are in
-`docs/release-notes-1.0.8.md` and `docs/release-notes-1.0.9.md`.
+Version 1.0.10. Source audited in full again on 26 October 2026, and 1.0.10
+ships the fixes from that pass; the previous full audit was 1.0.7 on
+17 August 2026. Per-version changes are in `docs/release-notes-X.Y.Z.md`
+(1.0.8, 1.0.9, 1.0.10). Releasing, including the required `production`
+approval, is described in `docs/RELEASING.md`.
 
 ## Verification status
 
@@ -146,6 +148,13 @@ observable from the background.
    of surfacing as unhandled rejections.
 9. `npm run release:dry-run` failed on Windows with `spawn EINVAL`, and
    `release-check.mjs` misread the workflow file in a CRLF checkout.
+10. The workflows ran pinned v4 actions on the deprecated Node 20 runtime.
+    They now pin checkout v7.0.1, setup-node v7.1.0, upload-artifact v7.0.2
+    and download-artifact v8.0.2 (all Node 24) by commit, build releases on
+    Node 24, and CI tests on Node 22 (the `engines` minimum) and 24.
+11. `publish-firefox.mjs` now submits `docs/amo-version-notes.txt` and
+    `docs/amo-reviewer-notes.txt` with the version, and refuses notes whose
+    first line names another version; the release check fails on the same.
 
 ## Audit pass, 17 August 2026
 
