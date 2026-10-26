@@ -12,7 +12,10 @@ import { fileURLToPath } from 'node:url';
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 await new Promise((resolve, reject) => {
-  const child = spawn(npm, ['run', 'verify'], { cwd: ROOT, stdio: 'inherit' });
+  // Node refuses to spawn .cmd files without a shell on Windows (EINVAL).
+  const child = spawn(npm, ['run', 'verify'], {
+    cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32'
+  });
   child.on('error', reject);
   child.on('exit', (code, signal) => code === 0 ? resolve() : reject(new Error(`verify exited with ${signal || code}`)));
 });

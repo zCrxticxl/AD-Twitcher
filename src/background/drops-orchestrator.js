@@ -668,10 +668,13 @@
       return Promise.resolve(api.tabs.create({ url: markedUrl, active: false })).then(function (created) {
         if (!created || created.id == null) throw new Error('farming tab was not created');
         setOwnership(rt, created.id, markedUrl);
-        Promise.resolve(api.tabs.update(created.id, {
-          muted: true,
-          autoDiscardable: false
-        })).catch(function () {});
+        // Separate calls: Firefox before 126 rejects the whole update over the
+        // unknown autoDiscardable flag, which would leave the tab audible.
+        Promise.resolve(api.tabs.update(created.id, { muted: true })).catch(function () {});
+        try {
+          Promise.resolve(api.tabs.update(created.id, { autoDiscardable: false }))
+            .catch(function () {});
+        } catch (_e) {}
         Promise.resolve(g.ADT.settings.bumpStat('streamsOpened')).catch(function () {});
         return created;
       });
@@ -793,7 +796,11 @@
           // Fire-and-forget: older Firefox rejects tabs.update when it sees
           // unsupported properties, so only essential options go into the
           // awaited call above.
-          try { api.tabs.update(tab.id, { autoDiscardable: false }); } catch (_e) {}
+          // The try covers a synchronous throw, the catch an async rejection.
+          try {
+            Promise.resolve(api.tabs.update(tab.id, { autoDiscardable: false }))
+              .catch(function () {});
+          } catch (_e) {}
           var now = Date.now();
           rt.ownedTabUrl = markedUrl;
           rt.active = {

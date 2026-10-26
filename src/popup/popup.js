@@ -1005,6 +1005,12 @@
         } else if (el.type === 'number') {
           val = parseInt(el.value, 10);
           if (isNaN(val)) return;
+          // The browser only enforces min/max on form submission, never on
+          // input, so a typed -500 or 0 would otherwise reach storage as is.
+          var min = parseInt(el.min, 10);
+          var max = parseInt(el.max, 10);
+          if (!isNaN(min) && val < min) val = min;
+          if (!isNaN(max) && val > max) val = max;
         } else {
           val = el.value;
         }
@@ -1071,7 +1077,7 @@
         ADT.settings.getStats().then(renderStats);
         showActionToast('settingsResetDone', true);
         ADT.send({ type: 'adt:settings-changed' });
-      });
+      }, settingsWriteFailed);
     });
 
     $('btnDropsNow').addEventListener('click', function () {

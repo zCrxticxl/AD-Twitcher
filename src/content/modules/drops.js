@@ -1034,6 +1034,10 @@
     var hit = null;
     D.qaAny(NOTIFY_ROOTS).forEach(function (root) {
       if (hit || !D.isVisible(root)) return;
+      // Our own "drop claimed" toast matches `div[class*="toast"]`, and in
+      // Russian and Japanese its wording also matches NOTIFY_RX. It outlives
+      // an SPA navigation away from the inventory, so it must not count.
+      if (root.closest && root.closest('#adt-toast-host')) return;
       var t = D.textOf(root);
       if (t && t.length < 400 && NOTIFY_RX.test(t)) hit = t;
     });

@@ -71,11 +71,11 @@
         active: !cfg.background
       })).then(function (tab) {
         if (cfg.muteOnOpen && tab && tab.id != null) {
+          // Firefox rejects this on tabs that have no audio yet. Harmless, but
+          // the rejection is asynchronous, so a try alone does not catch it.
           try {
-            api.tabs.update(tab.id, { muted: true });
-          } catch (e) {
-            // Firefox rejects this on tabs that have no audio yet. Harmless.
-          }
+            Promise.resolve(api.tabs.update(tab.id, { muted: true })).catch(function () {});
+          } catch (e) {}
         }
         log.info('autoJoin: ' + login + ' went live, tab opened');
         // Deliberately not awaited: the counter must not hold up the decision

@@ -1764,6 +1764,21 @@ console.log('\n[close-tab alarm lifecycle]');
   await other.settle();
   assert('an alarm naming an id nobody holds touches no real tab',
     !!otherTabs[5] && other.removes.length === 0);
+
+  // The alarm is persisted. By the time it fires the user may have navigated
+  // the inventory tab to a stream, or a browser restart may have handed the
+  // id to an unrelated tab. Neither is the extension's to close.
+  const movedTabs = {};
+  const moved = swSandbox({}, movedTabs, {});
+  await moved.send({type: 'adt:drops-check-now'});
+  await moved.settle();
+  const movedId = Object.keys(movedTabs).map(Number)[0];
+  movedTabs[movedId].url = 'https://www.twitch.tv/somechannel';
+  movedTabs[movedId].inventory = false;
+  moved.fireAlarm('adt-close-tab:' + movedId);
+  await moved.settle();
+  assert('a close-tab alarm leaves a tab that no longer shows the inventory open',
+    !!movedTabs[movedId] && moved.removes.length === 0);
 }
 
 console.log('\n[ad-mute recovery vs. user pause]');

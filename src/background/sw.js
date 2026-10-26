@@ -123,6 +123,9 @@
     return mv2Chain;
   }
 
+  /** @type {?Promise<!Object>} The injection pass currently running. */
+  var injectionInFlight = null;
+
   /**
    * Injects only where nothing answers the ping. Injecting twice would double
    * every listener and every interval.
@@ -130,6 +133,20 @@
    * @return {!Promise<{injected: number, alive: number}>}
    */
   function injectIntoOpenTabs() {
+    /*
+     * On install and on browser start the event listener and the top-level
+     * worker start both ask for this at the same moment. Two concurrent passes
+     * both see the same silent tab and both inject into it.
+     */
+    if (injectionInFlight) return injectionInFlight;
+    injectionInFlight = injectPass();
+    var clear = function () { injectionInFlight = null; };
+    injectionInFlight.then(clear, clear);
+    return injectionInFlight;
+  }
+
+  /** @return {!Promise<{injected: number, alive: number}>} */
+  function injectPass() {
     return Promise.resolve(api.tabs.query({ url: '*://*.twitch.tv/*' }))
       .then(function (tabs) {
         if (!tabs || !tabs.length) {
@@ -317,6 +334,26 @@
       });
       return 'opened';
     });
+  }
+
+  /**
+   * Closes a tab opened by openInventoryTab, but only while it still shows the
+   * inventory. The alarm is persisted and outlives the tab it was made for:
+   * the user may have navigated that tab somewhere else, and after a browser
+   * restart the same id can belong to an unrelated tab.
+   *
+   * @param {number} tabId
+   * @return {!Promise<void>}
+   */
+  function closeInventoryTab(tabId) {
+    return Promise.resolve(api.tabs.get(tabId)).then(function (tab) {
+      if (!tab || !/^https:\/\/([a-z0-9-]+\.)*twitch\.tv\/drops\/inventory(?:[/?#]|$)/i
+          .test(tab.url || '')) {
+        log.debug('drops: tab ' + tabId + ' no longer shows the inventory, left open');
+        return;
+      }
+      return api.tabs.remove(tabId);
+    }).catch(function () {});
   }
 
   /* ------------------------------------------------------ activity record */
@@ -733,9 +770,7 @@
     }
     if (alarm.name.indexOf(ALARM_CLOSE_TAB_PREFIX) === 0) {
       var tabId = Number(alarm.name.slice(ALARM_CLOSE_TAB_PREFIX.length));
-      if (Number.isInteger(tabId)) {
-        Promise.resolve(api.tabs.remove(tabId)).catch(function () {});
-      }
+      if (Number.isInteger(tabId)) closeInventoryTab(tabId);
     }
     // ALARM_HEALTH exists to nudge the MV3 worker awake now and then.
   });
@@ -954,7 +989,9 @@
           sendResponse({ ok: false, error: 'invalid counter' });
           return true;
         }
-        g.ADT.settings.bumpStat(msg.key, msg.by || 1);
+        Promise.resolve(g.ADT.settings.bumpStat(msg.key, msg.by || 1)).catch(function (e) {
+          log.warn('bump-stat: ' + (e && e.message));
+        });
         sendResponse({ ok: true });
         return true;
 

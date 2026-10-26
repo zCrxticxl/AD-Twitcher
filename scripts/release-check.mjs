@@ -155,7 +155,8 @@ async function validateAutomationPolicy() {
     .filter((reference) => !/^[0-9a-f]{40}$/.test(reference));
   if (mutableActions.length) fail(`workflow action references are mutable: ${mutableActions.join(', ')}`);
   else ok('workflow actions are pinned to immutable commits');
-  const releaseLines = release.split('\n');
+  // A Windows checkout has CRLF line endings; a trailing \r breaks the match.
+  const releaseLines = release.split(/\r?\n/);
   for (const job of ['github-release', 'publish-chrome', 'publish-firefox', 'publish-edge']) {
     const start = releaseLines.indexOf(`  ${job}:`);
     const next = releaseLines.findIndex((line, index) => index > start && /^  [a-z0-9-]+:$/.test(line));
@@ -167,7 +168,7 @@ async function validateAutomationPolicy() {
 async function validateOutputs(version) {
   const expected = await expectedBuildFiles();
   const checksumText = await readFile(join(RELEASE, 'SHA256SUMS'), 'utf8');
-  const checksumLines = checksumText.trim().split('\n');
+  const checksumLines = checksumText.trim().split(/\r?\n/);
   const expectedArchives = RELEASE_TARGETS.map((target) => `ad-twitcher-${target}-v${version}.zip`).sort();
   const listedArchives = checksumLines.map((line) => line.match(/^[0-9a-f]{64}  (.+)$/)?.[1]).sort();
   if (JSON.stringify(listedArchives) !== JSON.stringify(expectedArchives)) fail('SHA256SUMS artifact list is incomplete');
