@@ -18,6 +18,7 @@ import {
   sha256File,
   walkFiles
 } from './release-lib.mjs';
+import { amoNotes } from './publish-lib.mjs';
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)));
 const SRC = join(ROOT, 'src');
@@ -215,6 +216,18 @@ try {
   else ok('package-lock.json version matches');
 } catch (error) {
   fail(`package-lock.json: ${error.message}`);
+}
+try {
+  await amoNotes(pkg.version);
+  ok(`AMO release and reviewer notes name v${pkg.version}`);
+} catch (error) {
+  fail(error.message);
+}
+try {
+  await lstat(join(ROOT, 'docs', `release-notes-${pkg.version}.md`));
+  ok(`docs/release-notes-${pkg.version}.md exists`);
+} catch {
+  fail(`docs/release-notes-${pkg.version}.md is missing`);
 }
 await scanRepositoryFiles();
 await validateSource(pkg.version);

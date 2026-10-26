@@ -6,9 +6,13 @@
  */
 import { createHmac, randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
-import { apiRequest, base64url, publishingContext, required, wait } from './publish-lib.mjs';
+import {
+  amoNotes, apiRequest, base64url, publishingContext, required, wait
+} from './publish-lib.mjs';
 
 const { version, archive } = await publishingContext('firefox');
+// Read before anything is uploaded, so stale notes fail the job early.
+const notes = await amoNotes(version);
 const addonId = required('AMO_EXTENSION_ID');
 const apiKey = required('WEB_EXT_API_KEY');
 const apiSecret = required('WEB_EXT_API_SECRET');
@@ -47,7 +51,11 @@ const submitted = (await apiRequest(
   {
     method: 'POST',
     headers: { Authorization: authorization(), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ upload: upload.uuid })
+    body: JSON.stringify({
+      upload: upload.uuid,
+      release_notes: { 'en-US': notes.release },
+      approval_notes: notes.approval
+    })
   }
 )).data;
 if (submitted?.version !== version) throw new Error('AMO version submission response did not confirm the expected version');

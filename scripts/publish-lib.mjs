@@ -40,6 +40,29 @@ export async function publishingContext(target) {
   return { version: pkg.version, archive };
 }
 
+/** Files whose first line must name the version being released. */
+export const AMO_NOTES = Object.freeze({
+  release: 'docs/amo-version-notes.txt',
+  approval: 'docs/amo-reviewer-notes.txt'
+});
+
+/**
+ * Reads the AMO release and reviewer notes, refusing ones written for another
+ * version: stale notes would reach users and reviewers under the new version.
+ */
+export async function amoNotes(version) {
+  const out = {};
+  const exact = new RegExp(`(^|\\s)${version.replace(/\./g, '\\.')}(\\s|$)`);
+  for (const [kind, path] of Object.entries(AMO_NOTES)) {
+    const text = (await readFile(join(ROOT, path), 'utf8')).replace(/\r\n/g, '\n').trim();
+    if (!exact.test(text.split('\n')[0])) {
+      throw new Error(`${path} does not start with a line naming v${version}`);
+    }
+    out[kind] = text;
+  }
+  return out;
+}
+
 export async function apiRequest(url, options = {}) {
   const response = await fetch(url, {
     ...options,

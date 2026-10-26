@@ -14,6 +14,7 @@
 - [ ] Run `npm run release:dry-run`
 - [ ] Inspect all four ZIP files and `release/SHA256SUMS`
 - [ ] Publish Chrome, Firefox and Edge through the protected tag workflow
+- [ ] Approve the `production` deployment in the Release run (expires after 30 days)
 - [ ] Upload the Opera GX ZIP manually to Opera Add-ons
 
 A store never accepts a second upload under a version number it already has, so
