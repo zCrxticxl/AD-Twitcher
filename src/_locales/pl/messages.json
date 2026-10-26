@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "brak postępu" },
   "farmStateNoCandidates": { "message": "brak odpowiedniej transmisji na żywo" },
   "farmStateComplete": { "message": "kolejka ukończona" },
+  "farmStatePaused": { "message": "wstrzymane, karta farmienia zamknięta („Zastosuj kolejkę” wznawia)" },
   "farmNoCampaigns": { "message": "Nie wykryto jeszcze żadnych aktywnych kampanii." },
   "farmNoHistory": { "message": "Nie zarejestrowano jeszcze żadnych prób odbioru." },
   "farmMoveUp": { "message": "Przenieś kampanię w górę" },

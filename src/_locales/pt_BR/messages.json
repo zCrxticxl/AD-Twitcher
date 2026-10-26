@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "sem progresso" },
   "farmStateNoCandidates": { "message": "nenhuma transmissão ao vivo elegível" },
   "farmStateComplete": { "message": "fila concluída" },
+  "farmStatePaused": { "message": "pausado, aba de farm fechada (“Aplicar fila” retoma)" },
   "farmNoCampaigns": { "message": "Nenhuma campanha ativa encontrada ainda." },
   "farmNoHistory": { "message": "Nenhuma tentativa de resgate registrada ainda." },
   "farmMoveUp": { "message": "Mover campanha para cima" },

@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "aucune progression" },
   "farmStateNoCandidates": { "message": "aucune diffusion en direct éligible" },
   "farmStateComplete": { "message": "file terminée" },
+  "farmStatePaused": { "message": "en pause, onglet de farming fermé (« Appliquer la file » reprend)" },
   "farmNoCampaigns": { "message": "Aucune campagne active détectée pour l'instant." },
   "farmNoHistory": { "message": "Aucune tentative de récupération enregistrée pour l'instant." },
   "farmMoveUp": { "message": "Remonter la campagne" },

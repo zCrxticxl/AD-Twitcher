@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "无进度" },
   "farmStateNoCandidates": { "message": "无符合条件的直播" },
   "farmStateComplete": { "message": "队列已完成" },
+  "farmStatePaused": { "message": "已暂停：挂机标签页已关闭（点击“应用队列”继续）" },
   "farmNoCampaigns": { "message": "尚未发现进行中的活动。" },
   "farmNoHistory": { "message": "尚未记录领取尝试。" },
   "farmMoveUp": { "message": "上移活动" },

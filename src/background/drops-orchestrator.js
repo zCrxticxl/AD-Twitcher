@@ -75,6 +75,7 @@
       ownedTabUrl: '',
       ownerToken: '',
       state: 'discovering',
+      pausedByUser: false,
       nextProbeAt: 0,
       lastInventoryAt: 0,
       lastEvent: '',
@@ -887,7 +888,14 @@
         if (!settings.enabled || !settings.drops.enabled || !settings.drops.autoFarm) {
           rt.state = 'off';
           rt.active = null;
+          // Switching farming off and on again is one way to lift the pause.
+          rt.pausedByUser = false;
           return closeOwnedTab(rt);
+        }
+        if (rt.pausedByUser) {
+          rt.state = 'paused';
+          rt.active = null;
+          return rt;
         }
         var now = Date.now();
         var probeMs = Math.max(2, finiteNumber(settings.drops.progressProbeMin) || 5) * 60000;
@@ -966,14 +974,33 @@
     });
   }
 
-  /** @param {number} tabId @return {!Promise<*>} */
-  function forgetTab(tabId) {
+  /**
+   * The owned tab went away without this module closing it - closeOwnedTab
+   * drops ownership before it removes the tab, so it never lands here. That
+   * leaves the user closing it, and reopening a tab they just closed would
+   * fight them. Farming pauses instead, until the queue is applied again from
+   * the popup or auto-farming is switched off and on.
+   *
+   * A whole window closing (or the browser quitting) is not that decision:
+   * the tab goes with everything else, and farming resumes in a new one as
+   * it did after a restart before.
+   *
+   * @param {number} tabId
+   * @param {boolean=} windowClosing tabs.onRemoved's removeInfo.isWindowClosing.
+   * @return {!Promise<*>}
+   */
+  function forgetTab(tabId, windowClosing) {
     return g.ADT.updateLocal(RT_KEY, function (stored) {
       var rt = normalizeRt(stored);
       if (rt.ownedTabId !== tabId) return undefined;
       setOwnership(rt, null);
       rt.active = null;
-      rt.state = 'switching';
+      if (windowClosing) {
+        rt.state = 'switching';
+      } else {
+        rt.state = 'paused';
+        rt.pausedByUser = true;
+      }
       rt.lastEvent = 'farming-tab-closed';
       rt.lastEventAt = Date.now();
       return rt;
@@ -1185,6 +1212,8 @@
           rt.selected = filtered;
           rt.selectionConfigured = true;
           rt.priority = filtered;
+          // Applying the queue is an explicit request to farm again.
+          rt.pausedByUser = false;
           if (rt.active && filtered.indexOf(rt.active.campaignKey) < 0) {
             rt.active = null;
             rt.state = filtered.length ? 'switching' : 'complete';

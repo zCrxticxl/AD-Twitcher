@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "nessun avanzamento" },
   "farmStateNoCandidates": { "message": "nessuna diretta idonea" },
   "farmStateComplete": { "message": "coda completata" },
+  "farmStatePaused": { "message": "in pausa, scheda di farming chiusa («Applica coda» riprende)" },
   "farmNoCampaigns": { "message": "Non sono ancora state rilevate campagne attive." },
   "farmNoHistory": { "message": "Nessun tentativo di riscatto registrato finora." },
   "farmMoveUp": { "message": "Sposta la campagna in alto" },

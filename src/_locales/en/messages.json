@@ -87,6 +87,7 @@
   "farmStateStalled": { "message": "no progress" },
   "farmStateNoCandidates": { "message": "no eligible live stream" },
   "farmStateComplete": { "message": "queue complete" },
+  "farmStatePaused": { "message": "paused, farming tab closed (“Apply queue” resumes)" },
   "farmNoCampaigns": { "message": "No active campaigns discovered yet." },
   "farmNoHistory": { "message": "No claim attempts recorded yet." },
   "farmMoveUp": { "message": "Move campaign up" },

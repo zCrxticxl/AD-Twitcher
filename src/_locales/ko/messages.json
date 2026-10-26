@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "진행도 없음" },
   "farmStateNoCandidates": { "message": "적합한 라이브 스트림 없음" },
   "farmStateComplete": { "message": "대기열 완료" },
+  "farmStatePaused": { "message": "일시정지됨, 파밍 탭이 닫힘 (“대기열 적용”으로 재개)" },
   "farmNoCampaigns": { "message": "아직 활성 캠페인을 찾지 못했습니다." },
   "farmNoHistory": { "message": "아직 수령 시도가 기록되지 않았습니다." },
   "farmMoveUp": { "message": "캠페인 위로 이동" },

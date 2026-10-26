@@ -423,9 +423,9 @@ function swSandbox(storage = {}, tabs = {}, alarmStore = {}, opts = {}) {
     /** Drives the real api.alarms.onAlarm listener sw.js registered. */
     fireAlarm(name) { alarmHandlers.forEach((fn) => fn({name})); },
     /** Reproduces tabs.onRemoved after Chrome has already destroyed the tab. */
-    fireTabRemoved(id) {
+    fireTabRemoved(id, removeInfo = {isWindowClosing: false}) {
       delete tabs[id];
-      tabRemovedHandlers.forEach((fn) => fn(id));
+      tabRemovedHandlers.forEach((fn) => fn(id, removeInfo));
     },
     /** Lets the promise chains inside the worker run to completion. */
     async settle(rounds = 12) {
@@ -1781,6 +1781,28 @@ console.log('\n[close-tab alarm lifecycle]');
     !!movedTabs[movedId] && moved.removes.length === 0);
 }
 
+console.log('\n[openInventoryTab off]');
+{
+  // The setting only forbids opening a tab. An inventory the user keeps open
+  // is still the place to claim.
+  const openTabs = {7: {id: 7, url: 'https://www.twitch.tv/drops/inventory', inventory: true}};
+  const withTab = swSandbox({}, openTabs, {}, {settings: {drops: {openInventoryTab: false}}});
+  withTab.setClaimReport({ok: true, report: {pending: 1, stale: false}});
+  await withTab.send({type: 'adt:drops-check-now'});
+  await withTab.settle();
+  assert('an already open inventory is still claimed in',
+    withTab.claims.length === 1 && withTab.claims[0] === 7 && withTab.createdTabs.length === 0);
+  assert('and the check is recorded as a claim, not as off',
+    withTab.storage.activityRuntime && withTab.storage.activityRuntime.outcome === 'claimed');
+
+  const noTab = swSandbox({}, {}, {}, {settings: {drops: {openInventoryTab: false}}});
+  await noTab.send({type: 'adt:drops-check-now'});
+  await noTab.settle();
+  assert('without an open inventory no tab is opened',
+    noTab.createdTabs.length === 0 && noTab.claims.length === 0 &&
+    noTab.storage.activityRuntime && noTab.storage.activityRuntime.outcome === 'off');
+}
+
 console.log('\n[ad-mute recovery vs. user pause]');
 {
   /*
@@ -2064,7 +2086,7 @@ console.log('\n[automatic Drops farming]');
     storage.dropsAutomationRuntime.ownedTabId === 31 &&
     /twitch\.tv\/gamma\?adt_farm=/.test(tabs[31].url || ''));
 }
-{
+for (const windowClosing of [false, true]) {
   const campaign = farmCampaign('replace', 'alpha', {candidates: [
     {login: 'alpha', href: '/alpha', viewers: 1}
   ]});
@@ -2086,13 +2108,42 @@ console.log('\n[automatic Drops farming]');
     settings: {drops: {autoFarm: true, autoClaim: false}}
   });
   await h.settle();
-  h.fireTabRemoved(41);
+  h.fireTabRemoved(41, {isWindowClosing: windowClosing});
   await h.settle(24);
 
-  assert('closing the owned farming tab creates a replacement',
+  if (windowClosing) {
+    // The window went with everything in it; nobody closed the farm on purpose.
+    assert('a farming tab lost to a closing window gets a replacement',
+      h.createdTabs.length === 1 &&
+      storage.dropsAutomationRuntime.ownedTabId === h.createdTabs[0] &&
+      storage.dropsAutomationRuntime.active &&
+      storage.dropsAutomationRuntime.active.campaignKey === 'replace');
+    continue;
+  }
+
+  // The user closed the tab by hand: reopening it would fight them.
+  assert('closing the owned farming tab by hand opens no replacement',
+    h.createdTabs.length === 0 &&
+    storage.dropsAutomationRuntime.ownedTabId == null);
+  assert('farming is paused after the user closed its tab',
+    storage.dropsAutomationRuntime.state === 'paused' &&
+    storage.dropsAutomationRuntime.pausedByUser === true &&
+    !storage.dropsAutomationRuntime.active);
+
+  await h.sandbox.ADT.dropsOrchestrator.tick(true);
+  await h.settle(24);
+  assert('the pause survives later ticks',
+    h.createdTabs.length === 0 && storage.dropsAutomationRuntime.state === 'paused');
+
+  // Switching auto-farming off and on again is an explicit resume.
+  h.settings.drops.autoFarm = false;
+  await h.sandbox.ADT.dropsOrchestrator.tick(false);
+  h.settings.drops.autoFarm = true;
+  await h.sandbox.ADT.dropsOrchestrator.tick(false);
+  await h.settle(24);
+  assert('toggling auto-farming off and on resumes the interrupted campaign',
     h.createdTabs.length === 1 &&
-    storage.dropsAutomationRuntime.ownedTabId === h.createdTabs[0]);
-  assert('the replacement resumes the interrupted campaign',
+    storage.dropsAutomationRuntime.ownedTabId === h.createdTabs[0] &&
     storage.dropsAutomationRuntime.active &&
     storage.dropsAutomationRuntime.active.campaignKey === 'replace' &&
     storage.dropsAutomationRuntime.active.channel === 'alpha');

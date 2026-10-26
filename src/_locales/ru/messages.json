@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "нет прогресса" },
   "farmStateNoCandidates": { "message": "нет подходящей трансляции" },
   "farmStateComplete": { "message": "очередь завершена" },
+  "farmStatePaused": { "message": "приостановлено, вкладка фарма закрыта («Применить очередь» возобновит)" },
   "farmNoCampaigns": { "message": "Активные кампании пока не обнаружены." },
   "farmNoHistory": { "message": "Попытки получения пока не зарегистрированы." },
   "farmMoveUp": { "message": "Поднять кампанию" },

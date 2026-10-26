@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "進捗なし" },
   "farmStateNoCandidates": { "message": "対象のライブ配信なし" },
   "farmStateComplete": { "message": "キュー完了" },
+  "farmStatePaused": { "message": "一時停止中：ファーミングタブが閉じられました（「キューを適用」で再開）" },
   "farmNoCampaigns": { "message": "アクティブなキャンペーンはまだ見つかっていません。" },
   "farmNoHistory": { "message": "受け取り試行はまだ記録されていません。" },
   "farmMoveUp": { "message": "キャンペーンを上へ移動" },

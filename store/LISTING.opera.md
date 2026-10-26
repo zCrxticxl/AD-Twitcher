@@ -34,16 +34,15 @@ Not affiliated with Twitch Interactive, Inc.
 **Changelog**
 
 ```
-1.0.7
-- New: the status tab shows what the extension is doing right now - the channel being watched, when drops were last checked and what came of it, and when the next check is due.
-- New: drop progress with a remaining time, closest to finished first, each with its campaign. Finished and expired drops are left out.
-- The popup footer shows the installed version.
+1.0.9
+- Redesigned settings tab: grouped cards, the default value next to every field and a reset button per card.
+- New: optional local watch-time statistics per channel, part of Watch Health.
+- Drop farming finds its own tab again after a browser restart and never takes over a tab you opened.
 
-1.0.6
-- Drops are claimed without a manual page reload. An out-of-date inventory tab is refreshed first.
-- Ad breaks are muted on the browser tab instead of the Twitch player, so no watch time is lost.
-- Playback resumes when the player pauses on its own. A pause you started is left alone.
-- The installed version is shown in the popup footer.
+1.0.8
+- Every running drop is shown as a progress bar; finished drops appear as markers.
+- After an ad, a pause you made yourself is respected - no automatic reload.
+- Auto-join only closes tabs it opened itself, and a drop unlock opens only one inventory tab.
 ```
 
 ---
@@ -75,16 +74,15 @@ Nicht mit Twitch Interactive, Inc. verbunden.
 **Changelog**
 
 ```
-1.0.7
-- Neu: Der Status-Tab zeigt, was die Erweiterung gerade tut - welcher Kanal überwacht wird, wann zuletzt nach Drops gesucht wurde und was dabei herauskam, und wann die nächste Prüfung ansteht.
-- Neu: Drop-Fortschritt mit Restzeit, das Fertigste zuerst, jeweils mit Kampagne. Fertige und abgelaufene Drops bleiben außen vor.
-- Die installierte Version steht unten im Popup.
+1.0.9
+- Neu gestalteter Einstellungs-Tab: gruppierte Karten, der Standardwert neben jedem Feld und ein Zurücksetzen-Button pro Karte.
+- Neu: optionale lokale Watchtime-Statistik pro Kanal, Teil der Wiedergabe-Überwachung.
+- Das Drop-Farming findet sein eigenes Tab nach einem Browser-Neustart wieder und übernimmt nie ein Tab, das du selbst geöffnet hast.
 
-1.0.6
-- Drops werden ohne manuelles Neuladen abgeholt. Ein veraltetes Inventar-Tab wird vorher aufgefrischt.
-- Werbepausen werden am Browser-Tab stummgeschaltet statt im Twitch-Player, dadurch geht keine Watchtime verloren.
-- Die Wiedergabe wird fortgesetzt, wenn der Player von selbst pausiert. Pausierst du selbst, bleibt es pausiert.
-- Die installierte Version steht unten rechts im Popup.
+1.0.8
+- Jeder laufende Drop wird als Fortschrittsbalken angezeigt, fertige Drops als Markierung.
+- Nach einer Werbung bleibt eine selbst gesetzte Pause bestehen - kein automatisches Neuladen.
+- Auto-Join schließt nur Tabs, die es selbst geöffnet hat, und ein Drop-Unlock öffnet nur ein Inventar-Tab.
 ```
 
 ---
@@ -116,16 +114,15 @@ Sin afiliación con Twitch Interactive, Inc.
 **Changelog**
 
 ```
-1.0.7
-- Nuevo: la pestaña de estado muestra qué está haciendo la extensión ahora mismo: el canal vigilado, cuándo se comprobaron los drops por última vez y con qué resultado, y cuándo toca la próxima comprobación.
-- Nuevo: progreso de los drops con tiempo restante, primero los más cercanos a completarse, cada uno con su campaña. Los drops completados y caducados quedan fuera.
-- La versión instalada aparece en el pie del popup.
+1.0.9
+- Pestaña de ajustes rediseñada: tarjetas agrupadas, el valor predeterminado junto a cada campo y un botón de restablecer por tarjeta.
+- Nuevo: estadísticas locales opcionales de tiempo de visualización por canal, dentro de Salud de reproducción.
+- El farmeo de drops vuelve a encontrar su propia pestaña tras reiniciar el navegador y nunca toma una pestaña que abriste tú.
 
-1.0.6
-- Los drops se reclaman sin recargar la página a mano. Antes se actualiza la pestaña de inventario desactualizada.
-- Los anuncios se silencian en la pestaña del navegador y no en el reproductor de Twitch, así no se pierde tiempo de visualización.
-- La reproducción se reanuda cuando el reproductor se pausa solo. Si pausas tú, se queda en pausa.
-- La versión instalada aparece en el pie del popup.
+1.0.8
+- Cada drop en curso se muestra como barra de progreso; los terminados aparecen como marcas.
+- Tras un anuncio se respeta la pausa que hiciste tú: sin recarga automática.
+- La unión automática solo cierra las pestañas que abrió ella misma, y un drop desbloqueado abre una sola pestaña de inventario.
 ```
 
 ---
@@ -157,16 +154,15 @@ Sans affiliation avec Twitch Interactive, Inc.
 **Changelog**
 
 ```
-1.0.7
-- Nouveau : l'onglet Statut montre ce que fait l'extension en ce moment : la chaîne surveillée, la dernière vérification des drops et son résultat, et l'heure de la prochaine.
-- Nouveau : progression des drops avec le temps restant, les plus avancés en premier, chacun avec sa campagne. Les drops terminés et expirés sont exclus.
-- La version installée est affichée en bas du popup.
+1.0.9
+- Onglet des paramètres repensé : cartes regroupées, valeur par défaut à côté de chaque champ et un bouton de réinitialisation par carte.
+- Nouveau : statistiques locales facultatives de temps de visionnage par chaîne, intégrées à la surveillance de lecture.
+- Le farming de drops retrouve son propre onglet après un redémarrage du navigateur et ne prend jamais un onglet que vous avez ouvert.
 
-1.0.6
-- Les drops sont récupérés sans rechargement manuel. Un onglet d'inventaire obsolète est actualisé au préalable.
-- Les pubs sont coupées au niveau de l'onglet et non dans le lecteur Twitch : plus de temps de visionnage perdu.
-- La lecture reprend quand le lecteur se met en pause tout seul. Une pause que vous déclenchez est respectée.
-- La version installée s'affiche en bas du popup.
+1.0.8
+- Chaque drop en cours s’affiche sous forme de barre de progression ; les drops terminés apparaissent comme repères.
+- Après une publicité, une pause que vous avez faite est respectée : plus de rechargement automatique.
+- La connexion automatique ne ferme que les onglets qu’elle a ouverts, et un drop débloqué n’ouvre qu’un seul onglet d’inventaire.
 ```
 
 ---
@@ -198,16 +194,15 @@ Non affiliato a Twitch Interactive, Inc.
 **Changelog**
 
 ```
-1.0.7
-- Novità: la scheda Stato mostra cosa sta facendo l'estensione in questo momento: il canale sorvegliato, l'ultimo controllo dei drops con il suo esito e quando è previsto il prossimo.
-- Novità: avanzamento dei drops con il tempo rimanente, prima quelli più vicini al completamento, ognuno con la sua campagna. I drops completati e scaduti restano fuori.
-- La versione installata è mostrata in fondo al popup.
+1.0.9
+- Scheda impostazioni riprogettata: schede raggruppate, il valore predefinito accanto a ogni campo e un pulsante di ripristino per scheda.
+- Novità: statistiche locali facoltative sul tempo di visione per canale, parte del controllo di riproduzione.
+- Il farming dei drop ritrova la propria scheda dopo il riavvio del browser e non prende mai una scheda aperta da te.
 
-1.0.6
-- I drops vengono riscattati senza ricaricare la pagina a mano. Una scheda inventario non aggiornata viene aggiornata prima.
-- La pubblicità viene silenziata sulla scheda del browser invece che nel player Twitch, così non si perde tempo di visione.
-- La riproduzione riprende quando il player si mette in pausa da solo. Se metti in pausa tu, resta in pausa.
-- La versione installata è mostrata in fondo al popup.
+1.0.8
+- Ogni drop in corso è mostrato come barra di avanzamento; quelli completati appaiono come indicatori.
+- Dopo una pubblicità, una pausa messa da te viene rispettata: niente ricaricamento automatico.
+- L’accesso automatico chiude solo le schede che ha aperto, e uno sblocco di drop apre una sola scheda dell’inventario.
 ```
 
 ---
@@ -239,16 +234,15 @@ Sem vínculo com a Twitch Interactive, Inc.
 **Changelog**
 
 ```
-1.0.7
-- Novo: a aba Status mostra o que a extensão está fazendo agora: o canal monitorado, quando os drops foram verificados pela última vez e com que resultado, e quando será a próxima verificação.
-- Novo: progresso dos drops com tempo restante, os mais próximos de concluir primeiro, cada um com sua campanha. Drops concluídos e expirados ficam de fora.
-- A versão instalada aparece no rodapé do popup.
+1.0.9
+- Aba de configurações redesenhada: cartões agrupados, o valor padrão ao lado de cada campo e um botão de redefinir por cartão.
+- Novo: estatísticas locais opcionais de tempo assistido por canal, parte da Saúde da reprodução.
+- O farm de drops encontra sua própria aba de novo após reiniciar o navegador e nunca assume uma aba aberta por você.
 
-1.0.6
-- Os drops são resgatados sem recarregar a página na mão. Uma aba de inventário desatualizada é atualizada antes.
-- Os anúncios são silenciados na aba do navegador em vez do player da Twitch, então nenhum tempo assistido é perdido.
-- A reprodução é retomada quando o player pausa sozinho. Se você pausar, continua pausado.
-- A versão instalada aparece no rodapé do popup.
+1.0.8
+- Cada drop em andamento aparece como barra de progresso; os concluídos aparecem como marcadores.
+- Depois de um anúncio, uma pausa feita por você é respeitada: sem recarregamento automático.
+- A entrada automática só fecha abas que ela mesma abriu, e um drop desbloqueado abre apenas uma aba de inventário.
 ```
 
 ---
@@ -280,16 +274,15 @@ Niepowiązane z Twitch Interactive, Inc.
 **Changelog**
 
 ```
-1.0.7
-- Nowość: karta Status pokazuje, co rozszerzenie robi w tej chwili - nadzorowany kanał, kiedy ostatnio sprawdzono dropy i z jakim skutkiem oraz kiedy nastąpi kolejne sprawdzenie.
-- Nowość: postęp dropów z czasem pozostałym, najbliższe ukończenia na górze, każdy ze swoją kampanią. Ukończone i wygasłe dropy są pomijane.
-- Zainstalowana wersja jest widoczna na dole okienka.
+1.0.9
+- Przeprojektowana karta ustawień: zgrupowane sekcje, wartość domyślna obok każdego pola i przycisk resetu w każdej sekcji.
+- Nowość: opcjonalne lokalne statystyki czasu oglądania dla każdego kanału, w ramach kontroli odtwarzania.
+- Farmienie dropów odnajduje swoją kartę po ponownym uruchomieniu przeglądarki i nigdy nie przejmuje karty otwartej przez Ciebie.
 
-1.0.6
-- Dropy są odbierane bez ręcznego przeładowania strony. Nieaktualna karta ekwipunku jest wcześniej odświeżana.
-- Reklamy są wyciszane na karcie przeglądarki zamiast w odtwarzaczu Twitcha, więc nie tracisz czasu oglądania.
-- Odtwarzanie wznawia się, gdy odtwarzacz sam się zatrzyma. Pauza wykonana przez Ciebie zostaje uszanowana.
-- Zainstalowana wersja jest widoczna na dole okienka rozszerzenia.
+1.0.8
+- Każdy trwający drop jest pokazany jako pasek postępu, ukończone jako znaczniki.
+- Po reklamie pauza ustawiona przez Ciebie jest respektowana - bez automatycznego przeładowania.
+- Automatyczne dołączanie zamyka tylko karty, które samo otworzyło, a odblokowany drop otwiera tylko jedną kartę ekwipunku.
 ```
 
 ---
@@ -321,16 +314,15 @@ AD-Twitcher не блокировщик рекламы: реклама Twitch п
 **Changelog**
 
 ```
-1.0.7
-- Новое: вкладка «Статус» показывает, чем расширение занято прямо сейчас: какой канал отслеживается, когда в последний раз проверялись дропы и с каким результатом, и когда будет следующая проверка.
-- Новое: прогресс дропов с оставшимся временем, ближайшие к завершению сверху, каждый со своей кампанией. Завершённые и истёкшие дропы не показываются.
-- Установленная версия показана внизу всплывающего окна.
+1.0.9
+- Переработанная вкладка настроек: сгруппированные карточки, значение по умолчанию рядом с каждым полем и кнопка сброса для каждой карточки.
+- Новое: необязательная локальная статистика времени просмотра по каналам в составе контроля воспроизведения.
+- Фарм дропов снова находит свою вкладку после перезапуска браузера и никогда не забирает вкладку, открытую вами.
 
-1.0.6
-- Дропы забираются без ручной перезагрузки страницы. Устаревшая вкладка инвентаря обновляется заранее.
-- Реклама заглушается на вкладке браузера, а не в плеере Twitch, поэтому время просмотра не теряется.
-- Воспроизведение возобновляется, если плеер остановился сам. Пауза, поставленная вами, сохраняется.
-- Установленная версия показана внизу всплывающего окна.
+1.0.8
+- Каждый текущий дроп показан полосой прогресса, завершённые - отметками.
+- После рекламы пауза, поставленная вами, сохраняется - без автоматической перезагрузки.
+- Автоподключение закрывает только вкладки, которые открыло само, а разблокировка дропа открывает только одну вкладку инвентаря.
 ```
 
 ---
@@ -362,16 +354,15 @@ Twitch Interactive, Inc. ile bağlantılı değildir.
 **Changelog**
 
 ```
-1.0.7
-- Yeni: Durum sekmesi eklentinin şu anda ne yaptığını gösterir: izlenen kanal, dropsların en son ne zaman kontrol edildiği ve sonucu, bir sonraki kontrolün ne zaman olacağı.
-- Yeni: kalan süreyle birlikte drops ilerlemesi, bitmeye en yakın olan en üstte, her biri kampanyasıyla. Tamamlanmış ve süresi dolmuş dropslar listelenmez.
-- Kurulu sürüm açılır pencerenin altında gösterilir.
+1.0.9
+- Yeniden tasarlanan ayarlar sekmesi: gruplanmış kartlar, her alanın yanında varsayılan değer ve her kart için sıfırlama düğmesi.
+- Yeni: Oynatma Sağlığı kapsamında kanal başına isteğe bağlı yerel izleme süresi istatistikleri.
+- Drop farmı, tarayıcı yeniden başlatıldıktan sonra kendi sekmesini yeniden bulur ve senin açtığın bir sekmeyi asla devralmaz.
 
-1.0.6
-- Dropslar sayfayı elle yenilemeden alınır. Eskimiş envanter sekmesi önce tazelenir.
-- Reklamlar Twitch oynatıcısı yerine tarayıcı sekmesinde sessize alınır, böylece izleme süresi kaybolmaz.
-- Oynatıcı kendiliğinden duraklarsa oynatma sürdürülür. Sizin duraklattığınız yayın duraklamış kalır.
-- Kurulu sürüm açılır pencerenin altında gösterilir.
+1.0.8
+- Devam eden her drop bir ilerleme çubuğu olarak, tamamlananlar işaret olarak gösterilir.
+- Reklamdan sonra kendi verdiğin duraklatmaya dokunulmaz - otomatik yenileme yok.
+- Otomatik katılım yalnızca kendi açtığı sekmeleri kapatır ve bir drop açılması yalnızca tek bir envanter sekmesi açar.
 ```
 
 ---
@@ -403,16 +394,15 @@ Twitch Interactive, Inc. とは関係ありません。
 **Changelog**
 
 ```
-1.0.7
-- 新機能: ステータスタブに現在の動作を表示します。監視中のチャンネル、前回の Drops 確認の時刻と結果、次回の確認予定。
-- 新機能: Drops の進捗と残り時間を、完了に近い順にキャンペーン名つきで表示します。完了済みと終了したものは除外されます。
-- インストール済みのバージョンをポップアップ下部に表示します。
+1.0.9
+- 設定タブを刷新：カードをグループ化し、各項目の横に既定値を表示、カードごとにリセットボタンを追加。
+- 新機能：再生ヘルスの一部として、チャンネルごとの視聴時間をローカルに記録する統計（任意）。
+- ドロップのファーミングはブラウザーの再起動後も自分のタブを見つけ直し、あなたが開いたタブを乗っ取ることはありません。
 
-1.0.6
-- 手動での再読み込みなしに Drops を受け取れるようになりました。古いインベントリタブは先に更新されます。
-- 広告のミュートを Twitch プレイヤーではなくブラウザーのタブで行うようになり、視聴時間が失われません。
-- プレイヤーがひとりでに停止したときに再生を再開します。自分で停止した場合はそのままです。
-- インストール済みのバージョンをポップアップ下部に表示します。
+1.0.8
+- 進行中のドロップはすべて進捗バーで表示され、完了したドロップはマーカーで示されます。
+- 広告の後、あなたが自分で一時停止した場合はそのまま維持され、自動で再読み込みされません。
+- 自動参加は自分で開いたタブだけを閉じ、ドロップの解除で開くインベントリタブは 1 つだけです。
 ```
 
 ---
@@ -444,16 +434,15 @@ Twitch Interactive, Inc.와 제휴 관계가 없습니다.
 **Changelog**
 
 ```
-1.0.7
-- 새 기능: 상태 탭에 지금 무엇을 하고 있는지 표시합니다. 감시 중인 채널, 마지막 드롭 확인 시각과 결과, 다음 확인 예정 시각.
-- 새 기능: 드롭 진행도와 남은 시간을 완료에 가까운 순서로, 캠페인과 함께 표시합니다. 완료되었거나 종료된 드롭은 제외됩니다.
-- 설치된 버전을 팝업 하단에 표시합니다.
+1.0.9
+- 설정 탭 새 디자인: 카드별로 묶고, 각 항목 옆에 기본값을 표시하며, 카드마다 초기화 버튼을 추가했습니다.
+- 새 기능: 재생 상태 관리의 일부로, 채널별 시청 시간을 로컬에 기록하는 선택형 통계.
+- 드롭 파밍은 브라우저를 다시 시작한 뒤에도 자기 탭을 다시 찾으며, 직접 연 탭을 가져가지 않습니다.
 
-1.0.6
-- 페이지를 직접 새로 고치지 않아도 드롭을 수령합니다. 오래된 인벤토리 탭은 먼저 갱신됩니다.
-- 광고를 Twitch 플레이어가 아니라 브라우저 탭에서 음소거하므로 시청 시간이 사라지지 않습니다.
-- 플레이어가 저절로 멈추면 재생을 다시 시작합니다. 직접 일시정지한 경우에는 그대로 둡니다.
-- 설치된 버전을 팝업 하단에 표시합니다.
+1.0.8
+- 진행 중인 모든 드롭이 진행률 막대로 표시되고, 완료된 드롭은 표시로 나타납니다.
+- 광고가 끝난 뒤 직접 일시정지한 경우 그대로 유지되며 자동으로 새로고침하지 않습니다.
+- 자동 참여는 직접 연 탭만 닫고, 드롭 잠금 해제 시 인벤토리 탭은 하나만 엽니다.
 ```
 
 ---
@@ -485,14 +474,13 @@ AD-Twitcher 不是广告拦截器：标签页静音期间 Twitch 广告仍在播
 **Changelog**
 
 ```
-1.0.7
-- 新增：状态标签页显示扩展当前在做什么：正在监视的频道、上次检查掉落的时间与结果、下次检查的时间。
-- 新增：掉落进度与剩余时间，越接近完成越靠前，并标注所属活动。已完成和已过期的掉落不再显示。
-- 弹出窗口底部显示已安装的版本号。
+1.0.9
+- 重新设计的设置标签页：卡片分组，每个字段旁显示默认值，每张卡片都有重置按钮。
+- 新增：可选的本地按频道观看时长统计，属于播放健康功能的一部分。
+- 掉宝挂机在浏览器重启后会重新找到自己的标签页，绝不会接管你自己打开的标签页。
 
-1.0.6
-- 无需手动刷新即可领取掉落，过期的库存标签页会先自动刷新。
-- 广告改为在浏览器标签页静音，而不是静音 Twitch 播放器，因此不会损失观看时长。
-- 播放器自行暂停时会恢复播放；你自己暂停则保持暂停。
-- 弹出窗口底部显示已安装的版本号。
+1.0.8
+- 每个进行中的掉宝都以进度条显示，已完成的以标记显示。
+- 广告结束后，你自己暂停的播放会保持暂停，不再自动刷新。
+- 自动加入只关闭它自己打开的标签页，一次掉宝解锁只会打开一个库存标签页。
 ```

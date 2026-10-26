@@ -511,14 +511,17 @@
       if (!s.enabled || !s.drops.enabled || (!s.drops.autoClaim && !farmingProbe)) {
         return noteDropsCheck('off', how);
       }
-      if (!s.drops.openInventoryTab) return noteDropsCheck('off', how);
 
       return Promise.resolve(api.tabs.query({
         url: ['*://*.twitch.tv/drops/inventory', '*://*.twitch.tv/drops/inventory?*']
       })).then(function (tabs) {
         var run;
         if (tabs && tabs.length) {
+          // An inventory that is already open is used whatever the setting:
+          // openInventoryTab only decides whether a new tab may be opened.
           run = claimInOpenInventory(tabs[0], s);
+        } else if (!s.drops.openInventoryTab) {
+          return noteDropsCheck('off', how);
         } else if (inventoryOpenPending) {
           log.debug('drops: inventory tab open already in flight');
           /*
@@ -745,8 +748,9 @@
       if (!force && sig === lastConfigSig) return;
       lastConfigSig = sig;
 
-      var dropsWanted = s.enabled && s.drops.enabled && s.drops.autoClaim &&
-        s.drops.openInventoryTab;
+      // Not tied to openInventoryTab: the check also claims in an inventory
+      // tab the user keeps open themselves.
+      var dropsWanted = s.enabled && s.drops.enabled && s.drops.autoClaim;
 
       return Promise.all([
         dropsWanted
@@ -1007,12 +1011,13 @@
     }
   });
 
-  api.tabs.onRemoved.addListener(function (tabId) {
+  api.tabs.onRemoved.addListener(function (tabId, removeInfo) {
+    var windowClosing = !!(removeInfo && removeInfo.isWindowClosing);
     g.ADT.liveWatch.forgetTab(tabId);
     queueWatchTab(tabId, function () {
       return Promise.all([
         g.ADT.watchHealth.forgetTab(tabId),
-        g.ADT.dropsOrchestrator.forgetTab(tabId)
+        g.ADT.dropsOrchestrator.forgetTab(tabId, windowClosing)
       ]);
     }).catch(function () {});
     forgetTabMute(tabId);

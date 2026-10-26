@@ -498,7 +498,8 @@
     watching: 'farmStateWatching',
     stalled: 'farmStateStalled',
     'no-candidates': 'farmStateNoCandidates',
-    complete: 'farmStateComplete'
+    complete: 'farmStateComplete',
+    paused: 'farmStatePaused'
   };
 
   /** @param {!Object} farm */
@@ -508,7 +509,8 @@
     $('farmState').textContent = ADT.msg(FARM_STATES[state] || 'farmStateOff');
     $('farmState').className = state === 'watching' || state === 'complete'
       ? 'farm-status--ok'
-      : (state === 'stalled' || state === 'no-candidates' ? 'farm-status--warn' : '');
+      : (state === 'stalled' || state === 'no-candidates' || state === 'paused'
+        ? 'farm-status--warn' : '');
     $('farmCampaign').textContent = farm.active && farm.active.campaignName
       ? farm.active.campaignName : EMPTY;
     $('farmStream').textContent = farm.active && farm.active.channel

@@ -1,6 +1,8 @@
 # AD-Twitcher - status and handover
 
-Version 1.0.7, 17 August 2026. Audited in full on the same day.
+Version 1.0.9. Source audited in full again on 26 October 2026; the previous
+full audit was 1.0.7 on 17 August 2026. The 1.0.8 and 1.0.9 changes are in
+`docs/release-notes-1.0.8.md` and `docs/release-notes-1.0.9.md`.
 
 ## Verification status
 
@@ -112,6 +114,38 @@ live Twitch behavior still requires manual browser sessions.
     scan that found nothing to go on still leaves it untouched. The popup tells
     the two states apart by the timestamp and says either "nothing earnable
     left" (`dropProgressNone`) or "not read yet" (`dropProgressEmpty`).
+
+## Audit pass, 26 October 2026
+
+A line-by-line read of `src/`, the build and release scripts and the
+workflows. Each fix below carries a harness test where the behavior is
+observable from the background.
+
+1. The persisted close-tab alarm for the inventory tab closed whatever tab
+   held that id. It now closes the tab only while it still shows
+   `/drops/inventory`, so a tab the user navigated elsewhere, or an id reused
+   after a browser restart, is left alone.
+2. A farming tab the user closes by hand is no longer reopened at once.
+   Farming pauses (`paused` in the popup) until "Apply queue" is pressed or
+   auto-farming is switched off and on. A tab lost to a closing window still
+   gets a replacement, as before.
+3. With "open the inventory in a background tab" switched off, an inventory
+   tab that is already open is now used for claiming; the setting only
+   forbids opening one. The periodic drops alarm no longer depends on it.
+4. The farming tab was muted and marked non-discardable in one
+   `tabs.update`. Firefox before 126 rejects the whole call over
+   `autoDiscardable`, which left the tab audible. They are separate calls now.
+5. The unlock watcher read the extension's own "drop claimed" toast; in
+   Russian and Japanese its wording matches the unlock pattern. Toasts inside
+   `#adt-toast-host` are ignored.
+6. Install and browser start ran two injection passes at once. A pass in
+   flight is now shared.
+7. Popup number fields are clamped to their `min`/`max` before they are
+   stored; the full reset reports a failed write.
+8. Asynchronous `tabs.update` and `bumpStat` rejections are caught instead
+   of surfacing as unhandled rejections.
+9. `npm run release:dry-run` failed on Windows with `spawn EINVAL`, and
+   `release-check.mjs` misread the workflow file in a CRLF checkout.
 
 ## Audit pass, 17 August 2026
 

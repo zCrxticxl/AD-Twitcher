@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "sin progreso" },
   "farmStateNoCandidates": { "message": "ninguna transmisión en directo válida" },
   "farmStateComplete": { "message": "cola completada" },
+  "farmStatePaused": { "message": "en pausa, pestaña de farmeo cerrada («Aplicar cola» la reanuda)" },
   "farmNoCampaigns": { "message": "Aún no se han detectado campañas activas." },
   "farmNoHistory": { "message": "Aún no se ha registrado ningún intento de canje." },
   "farmMoveUp": { "message": "Subir campaña" },

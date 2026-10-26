@@ -88,6 +88,7 @@
   "farmStateStalled": { "message": "ilerleme yok" },
   "farmStateNoCandidates": { "message": "uygun canlı yayın yok" },
   "farmStateComplete": { "message": "kuyruk tamamlandı" },
+  "farmStatePaused": { "message": "duraklatıldı, farm sekmesi kapatıldı (\"Kuyruğu uygula\" devam ettirir)" },
   "farmNoCampaigns": { "message": "Henüz etkin kampanya bulunmadı." },
   "farmNoHistory": { "message": "Henüz alma girişimi kaydedilmedi." },
   "farmMoveUp": { "message": "Kampanyayı yukarı taşı" },
